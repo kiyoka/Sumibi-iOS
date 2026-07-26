@@ -13,6 +13,7 @@
 		A10000000000000000000004 /* SumibiKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* SumibiKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000005 /* SumibiCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SumibiCore.framework */; };
 		A10000000000000000000006 /* SumibiCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SumibiCore.framework */; };
+		A10000000000000000000007 /* SharedSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* SharedSettings.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,9 @@
 		A20000000000000000000005 /* SumibiKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SumibiKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000006 /* SumibiCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SumibiCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000007 /* Sumibi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sumibi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000008 /* SharedSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSettings.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* SumibiApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SumibiApp.entitlements; sourceTree = "<group>"; };
+		A2000000000000000000000A /* SumibiKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SumibiKeyboard.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000001 /* SumibiApp.swift */,
+				A20000000000000000000009 /* SumibiApp.entitlements */,
 			);
 			path = SumibiApp;
 			sourceTree = "<group>";
@@ -113,6 +118,7 @@
 			children = (
 				A20000000000000000000002 /* KeyboardViewController.swift */,
 				A20000000000000000000004 /* Info.plist */,
+				A2000000000000000000000A /* SumibiKeyboard.entitlements */,
 			);
 			path = SumibiKeyboard;
 			sourceTree = "<group>";
@@ -121,6 +127,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000003 /* SumibiCore.swift */,
+				A20000000000000000000008 /* SharedSettings.swift */,
 			);
 			path = SumibiCore;
 			sourceTree = "<group>";
@@ -280,6 +287,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000003 /* SumibiCore.swift in Sources */,
+				A10000000000000000000007 /* SharedSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,6 +340,7 @@
 		AD0000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -352,6 +361,7 @@
 		AD0000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -372,6 +382,7 @@
 		AD0000000000000000000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -391,6 +402,7 @@
 		AD0000000000000000000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
