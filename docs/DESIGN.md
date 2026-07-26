@@ -250,6 +250,36 @@ UIとコントローラーは、1つの明示的な状態値を使用する。�
 
 ### 状態遷移
 
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+
+    idle --> composing: 表示可能文字を入力
+    composing --> composing: 文字入力または削除
+    composing --> converting: 変換
+
+    converting --> composing: キャンセル
+    converting --> composing: リクエスト中にキー入力
+    converting --> candidates: 有効な応答
+    converting --> staleResult: 編集不一致後に応答
+    converting --> error: 変換失敗
+
+    error --> converting: 再試行
+    error --> composing: 入力を編集
+
+    candidates --> candidates: 代替候補を選択
+    candidates --> composing: 原文またはUndo
+    candidates --> idle: 新しい入力範囲へ移動
+
+    staleResult --> idle: 結果を閉じる
+    staleResult --> composing: 新しい文字を入力
+
+    composing --> idle: 改行・キーボード切り替え
+    composing --> idle: 文脈の検証失敗
+    converting --> idle: 文脈の検証失敗
+    candidates --> staleResult: 文脈の検証失敗
+```
+
 | 現在の状態 | 事象 | 次の状態 | 処理 |
 | --- | --- | --- | --- |
 | `idle` | 表示可能文字の入力 | `composing` | 文字を挿入して追跡を開始する |
