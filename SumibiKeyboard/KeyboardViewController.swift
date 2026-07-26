@@ -9,7 +9,6 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private lazy var sharedSettings = SharedSettingsStore()
-    private let conversionClient: any ConversionClient = MockConversionClient()
     private let candidateStack = UIStackView()
     private var letterButtons: [UIButton] = []
     private var compositionTracker = CompositionTracker()
@@ -378,6 +377,35 @@ final class KeyboardViewController: UIInputViewController {
         refreshConvertButton()
     }
 
+    private func makeConversionClient() -> (any ConversionClient)? {
+        guard let configuration = sharedSettings?.loadProviderConfiguration() else {
+            return MockConversionClient()
+        }
+        if configuration.endpoint.isEmpty && configuration.model.isEmpty {
+            return MockConversionClient()
+        }
+        guard
+            let endpoint = URL(string: configuration.endpoint),
+            !configuration.model.isEmpty
+        else {
+            showCandidateMessage("APIの設定を確認してください")
+            return nil
+        }
+        guard hasFullAccess else {
+            showCandidateMessage("API変換にはフルアクセスが必要です")
+            return nil
+        }
+
+        let apiKey = try? APIKeyStore().load()
+        return OpenAICompatibleClient(
+            configuration: OpenAICompatibleConfiguration(
+                endpoint: endpoint,
+                model: configuration.model,
+                apiKey: apiKey
+            )
+        )
+    }
+
     @objc private func letterTapped(_ sender: UIButton) {
         guard let letter = sender.accessibilityIdentifier else {
             return
@@ -426,6 +454,11 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         pendingConversion = snapshot
+        guard let conversionClient = makeConversionClient() else {
+            pendingConversion = nil
+            refreshConvertButton()
+            return
+        }
         let requestID = UUID()
         activeRequestID = requestID
         showCandidateMessage("変換中…", showsProgress: true)
