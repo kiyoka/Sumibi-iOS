@@ -8,12 +8,19 @@ final class KeyboardViewController: UIInputViewController {
         var current: String
     }
 
+    private struct UndoRecord {
+        let original: String
+        var replacement: String
+    }
+
     private lazy var sharedSettings = SharedSettingsStore()
     private let candidateStack = UIStackView()
     private var letterButtons: [UIButton] = []
     private var compositionTracker = CompositionTracker()
     private var pendingConversion: ConversionSnapshot?
     private var candidateSession: CandidateSession?
+    private var undoRecord: UndoRecord?
+    private var retrySnapshot: ConversionSnapshot?
     private var conversionTask: Task<Void, Never>?
     private var activeRequestID: UUID?
     private var convertButton: UIButton?
@@ -33,6 +40,8 @@ final class KeyboardViewController: UIInputViewController {
         compositionTracker.reset()
         pendingConversion = nil
         candidateSession = nil
+        undoRecord = nil
+        retrySnapshot = nil
         refreshConvertButton()
     }
 
@@ -243,6 +252,42 @@ final class KeyboardViewController: UIInputViewController {
         candidateStack.addArrangedSubview(label)
     }
 
+    private func addCandidateAction(
+        title: String,
+        accessibilityLabel: String,
+        action: Selector
+    ) {
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = title
+        configuration.baseForegroundColor = .label
+        configuration.cornerStyle = .capsule
+
+        let button = UIButton(configuration: configuration)
+        button.accessibilityLabel = accessibilityLabel
+        button.addTarget(self, action: action, for: .touchUpInside)
+        candidateStack.addArrangedSubview(button)
+    }
+
+    private func showConverting() {
+        showCandidateMessage("変換中…", showsProgress: true)
+        addCandidateAction(
+            title: "キャンセル",
+            accessibilityLabel: "変換をキャンセル",
+            action: #selector(cancelTapped)
+        )
+    }
+
+    private func showError(_ message: String, retryable: Bool) {
+        showCandidateMessage(message)
+        if retryable {
+            addCandidateAction(
+                title: "再試行",
+                accessibilityLabel: "変換を再試行",
+                action: #selector(retryTapped)
+            )
+        }
+    }
+
     private func showCandidates() {
         guard let session = candidateSession else {
             showCandidateMessage("候補がありません")
@@ -250,6 +295,13 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         clearCandidateBar()
+        if undoRecord != nil {
+            addCandidateAction(
+                title: "↶ Undo",
+                accessibilityLabel: "変換を元に戻す",
+                action: #selector(undoTapped)
+            )
+        }
         for (index, option) in session.options.enumerated() {
             var configuration = UIButton.Configuration.gray()
             configuration.title = option == session.original ? "原文" : option
@@ -273,6 +325,8 @@ final class KeyboardViewController: UIInputViewController {
         activeRequestID = nil
         pendingConversion = nil
         candidateSession = nil
+        undoRecord = nil
+        retrySnapshot = nil
         showCandidateMessage("入力中")
     }
 
@@ -360,21 +414,64 @@ final class KeyboardViewController: UIInputViewController {
             options: options,
             current: firstCandidate
         )
+        undoRecord = firstCandidate == snapshot.source
+            ? nil
+            : UndoRecord(original: snapshot.source, replacement: firstCandidate)
+        retrySnapshot = nil
         pendingConversion = nil
         compositionTracker.reset()
         showCandidates()
         refreshConvertButton()
     }
 
-    private func failConversion(requestID: UUID) {
+    private func failConversion(
+        _ error: Error,
+        snapshot: ConversionSnapshot,
+        requestID: UUID
+    ) {
         guard activeRequestID == requestID else {
             return
         }
         activeRequestID = nil
         conversionTask = nil
         pendingConversion = nil
-        showCandidateMessage("モック変換に失敗しました")
+        let presentation = errorPresentation(for: error)
+        retrySnapshot = presentation.retryable ? snapshot : nil
+        showError(presentation.message, retryable: presentation.retryable)
         refreshConvertButton()
+    }
+
+    private func errorPresentation(for error: Error) -> (message: String, retryable: Bool) {
+        if let error = error as? OpenAICompatibleClientError {
+            switch error {
+            case .invalidEndpoint:
+                return ("APIのURLが無効です", false)
+            case .invalidResponse, .emptyResponse:
+                return ("APIから有効な候補を取得できませんでした", true)
+            case .invalidCredentials:
+                return ("APIキーを確認してください", false)
+            case .rateLimited:
+                return ("利用回数の上限に達しました", true)
+            case .serverError:
+                return ("APIサーバーでエラーが発生しました", true)
+            case .httpError:
+                return ("APIリクエストに失敗しました", false)
+            }
+        }
+
+        if let error = error as? URLError {
+            switch error.code {
+            case .timedOut:
+                return ("変換がタイムアウトしました", true)
+            case .notConnectedToInternet, .networkConnectionLost:
+                return ("ネットワークに接続できません", true)
+            case .cancelled:
+                return ("変換をキャンセルしました", false)
+            default:
+                return ("通信エラーが発生しました", true)
+            }
+        }
+        return ("変換に失敗しました", true)
     }
 
     private func makeConversionClient() -> (any ConversionClient)? {
@@ -453,7 +550,13 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
+        startConversion(snapshot)
+    }
+
+    private func startConversion(_ snapshot: ConversionSnapshot) {
         pendingConversion = snapshot
+        retrySnapshot = nil
+        undoRecord = nil
         guard let conversionClient = makeConversionClient() else {
             pendingConversion = nil
             refreshConvertButton()
@@ -461,7 +564,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         let requestID = UUID()
         activeRequestID = requestID
-        showCandidateMessage("変換中…", showsProgress: true)
+        showConverting()
         refreshConvertButton()
 
         let request = ConversionRequest(
@@ -478,9 +581,61 @@ final class KeyboardViewController: UIInputViewController {
             } catch is CancellationError {
                 return
             } catch {
-                self?.failConversion(requestID: requestID)
+                self?.failConversion(error, snapshot: snapshot, requestID: requestID)
             }
         }
+    }
+
+    @objc private func cancelTapped() {
+        guard activeRequestID != nil else {
+            return
+        }
+        conversionTask?.cancel()
+        conversionTask = nil
+        activeRequestID = nil
+        pendingConversion = nil
+        retrySnapshot = nil
+        showCandidateMessage("変換をキャンセルしました")
+        refreshConvertButton()
+    }
+
+    @objc private func retryTapped() {
+        guard
+            let snapshot = retrySnapshot,
+            compositionTracker.revision == snapshot.revision,
+            compositionTracker.matches(
+                documentContextBeforeInput: textDocumentProxy.documentContextBeforeInput
+            )
+        else {
+            retrySnapshot = nil
+            showCandidateMessage("入力内容が変更されたため再試行できません")
+            return
+        }
+        startConversion(snapshot)
+    }
+
+    @objc private func undoTapped() {
+        guard let undoRecord else {
+            return
+        }
+        let expectedSuffix = String(undoRecord.replacement.suffix(32))
+        guard
+            !expectedSuffix.isEmpty,
+            textDocumentProxy.documentContextBeforeInput?.hasSuffix(expectedSuffix) == true
+        else {
+            self.undoRecord = nil
+            candidateSession = nil
+            showCandidateMessage("入力内容が変更されたため元に戻せません")
+            return
+        }
+
+        replaceHostText(undoRecord.replacement, with: undoRecord.original)
+        compositionTracker.reset()
+        compositionTracker.append(undoRecord.original)
+        self.undoRecord = nil
+        candidateSession = nil
+        showCandidateMessage("原文を復元しました")
+        refreshConvertButton()
     }
 
     @objc private func candidateTapped(_ sender: UIButton) {
@@ -497,6 +652,7 @@ final class KeyboardViewController: UIInputViewController {
             textDocumentProxy.documentContextBeforeInput?.hasSuffix(expectedSuffix) == true
         else {
             candidateSession = nil
+            undoRecord = nil
             showCandidateMessage("入力内容が変更されたため置換しません")
             return
         }
@@ -508,6 +664,9 @@ final class KeyboardViewController: UIInputViewController {
         replaceHostText(session.current, with: replacement)
         session.current = replacement
         candidateSession = session
+        undoRecord = replacement == session.original
+            ? nil
+            : UndoRecord(original: session.original, replacement: replacement)
         showCandidates()
     }
 
