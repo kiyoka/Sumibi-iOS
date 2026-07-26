@@ -172,8 +172,139 @@ Known platform limits:
 - Minimum supported iOS version
 - Final bundle and App Group identifiers
 - First default provider and model
-- Exact conversion-target boundary rules
 - Maximum surrounding-context size
 - API-key sharing mechanism between app and extension
 - Whether candidate requests should return multiple candidates in one response
 - Licensing and App Store privacy disclosures
+
+## 12. Conversion target and composition tracking
+
+### MVP decision
+
+The MVP converts only a composition that was inserted and is still owned by the
+current Sumibi keyboard session. It does not infer an arbitrary editable range
+from the host application's document.
+
+This is intentionally narrower than the Emacs version. A keyboard extension can
+read limited text around the cursor through the document proxy, but it does not
+own the host document or a stable selection range. Restricting replacement to
+tracked input avoids deleting unrelated text after cursor movement or host-side
+editing.
+
+### Tracked composition
+
+`CompositionTracker` maintains:
+
+- `source`: the exact text inserted by Sumibi since the last hard boundary
+- `revision`: a monotonically increasing local edit revision
+- `expectedSuffix`: a bounded suffix used to verify the cursor context
+- `isReplaceable`: whether automatic replacement is still safe
+
+The tracker appends ordinary printable input. Delete removes the last extended
+grapheme cluster when the proxy context still matches. The tracker is cleared
+after return, keyboard switching, an explicit reset, or successful conversion.
+
+Space and punctuation are retained in the composition so that a phrase such as
+`watashi ha kiyoka desu .` can be converted as one unit. Return is a hard
+boundary. To prevent unbounded requests, the tracker keeps at most 512
+characters for an MVP conversion target; older text may still be used as
+read-only context.
+
+### Safety validation
+
+Before starting a request and again before replacing text, the keyboard checks
+that the available `documentContextBeforeInput` ends with `expectedSuffix`.
+The second check also requires the same local `revision` captured by the
+request.
+
+If either check fails:
+
+- do not delete or replace host text;
+- retain the returned candidates for manual inspection;
+- show a short message that the text changed;
+- allow the user to copy or dismiss the result;
+- start a fresh composition with the next key input.
+
+This rule covers cursor movement, edits made by the host app, Dictation, text
+replacement, and continued typing while a request is in flight.
+
+### Replacement
+
+On a valid result:
+
+1. Revalidate the tracked suffix and request revision.
+2. Call `deleteBackward()` once per extended grapheme cluster in `source`.
+3. Insert the selected candidate.
+4. Store an `UndoRecord` containing the original, replacement, and a new
+   expected suffix.
+5. Clear the active composition.
+
+Deletion is grapheme-based rather than UTF-16-length-based so that emoji and
+combined characters do not cause an incorrect number of delete operations.
+
+### Undo
+
+Undo is available only while the cursor remains directly after the exact
+replacement inserted by Sumibi. It performs the same suffix validation, deletes
+the replacement by extended grapheme cluster, and reinserts the original source.
+Any unrelated insertion, deletion, cursor movement, keyboard switch, or new
+conversion invalidates the `UndoRecord`.
+
+### Explicit non-goals for the MVP
+
+- Converting an arbitrary selection created in the host application
+- Reconstructing an entire document from proxy context
+- Replacing text after validation fails
+- Ambient conversion
+
+## 13. Keyboard state machine
+
+The UI and controller use one explicit state value. Network callbacks carry a
+request ID and are ignored when they no longer match the active request.
+
+### States
+
+- `idle`: no tracked input
+- `composing`: tracked input is valid and Convert is enabled
+- `converting`: one request is active; source text remains unchanged
+- `candidates`: conversion succeeded and alternatives are available
+- `staleResult`: conversion succeeded but the source is no longer replaceable
+- `error`: the request failed without modifying the source
+
+### Transitions
+
+| Current state | Event | Next state | Effect |
+| --- | --- | --- | --- |
+| `idle` | printable key | `composing` | Insert and begin tracking |
+| `composing` | printable key or delete | `composing` | Insert/delete and increment revision |
+| `composing` | Convert | `converting` | Validate, snapshot, and start request |
+| `converting` | Cancel | `composing` | Cancel request; preserve source |
+| `converting` | key input | `composing` | Cancel or supersede request; preserve responsiveness |
+| `converting` | valid response | `candidates` | Replace with first candidate and create Undo record |
+| `converting` | response after edit mismatch | `staleResult` | Never modify host text |
+| `converting` | failure | `error` | Preserve source and offer Retry |
+| `error` | Retry | `converting` | Revalidate and issue a new request |
+| `candidates` | alternative selected | `candidates` | Safely replace the current Sumibi result |
+| `candidates` | Original/Undo | `composing` | Restore the exact source |
+| any | context validation failure | `idle` or `staleResult` | Invalidate automatic replacement |
+
+### Concurrency rules
+
+- At most one request controls automatic replacement.
+- Starting a new request cancels the previous task and changes the request ID.
+- Cancellation is cooperative; a late response is ignored.
+- Main-actor state changes are serialized.
+- Source text is never removed merely to show a progress state.
+- Retry creates a new request ID and rechecks document context.
+
+### Candidate behavior
+
+The first valid response is inserted immediately to preserve the modeless Sumibi
+workflow. The candidate bar then shows alternatives and `Original`. Selecting
+another candidate is allowed only while the current inserted result still
+matches the expected suffix. Otherwise the state becomes `staleResult` and no
+replacement occurs.
+
+For the initial API contract, one request should return up to three ordered
+candidates. If a provider returns only one result, the candidate bar still
+offers `Original`.
