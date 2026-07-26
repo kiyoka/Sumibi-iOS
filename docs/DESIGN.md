@@ -1,310 +1,281 @@
-# Sumibi-iOS Design
+# Sumibi-iOS 設計書
 
-## 1. Purpose
+## 1. 目的
 
-Sumibi-iOS is an iOS custom keyboard that converts romaji or English text into natural Japanese with an LLM. It brings the modeless workflow of the Emacs version of Sumibi to iPhone and iPad.
+Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語へ変換するiOSカスタムキーボードである。Emacs版Sumibiのモードレスな入力方式をiPhoneとiPadで実現する。
 
-## 2. Product principles
+## 2. 製品原則
 
-- Keep Japanese input modeless: users type with an English QWERTY layout and explicitly request conversion.
-- Make conversion reversible: the original text must remain available for Undo.
-- Minimize data sent to external services and explain network use clearly.
-- Keep the keyboard responsive even while an LLM request is running.
-- Separate keyboard UI, conversion logic, provider integration, and settings storage.
+- 日本語入力をモードレスに保つ。利用者は英字QWERTY配列で入力し、明示的に変換を実行する。
+- 変換を元に戻せるようにする。Undoで原文へ戻せなければならない。
+- 外部サービスへ送るデータを最小限にし、ネットワーク利用を明確に説明する。
+- LLMへのリクエスト中もキーボードの応答性を保つ。
+- キーボードUI、変換処理、プロバイダー連携、設定保存を分離する。
 
-## 3. MVP scope
+## 3. MVPの範囲
 
-### Included
+### MVPに含める機能
 
-- English QWERTY keyboard layout
-- Romaji and English input
-- A dedicated Convert key
-- LLM-based Japanese conversion
-- A candidate bar for alternative results
-- Undo to restore the original text
-- OpenAI-compatible provider configuration
-- API key and model configuration in the containing app
-- Onboarding for enabling the keyboard and Allow Full Access
-- Clear error states for missing full access, network failure, timeout, and invalid credentials
+- 英字QWERTYキーボード配列
+- ローマ字および英語の入力
+- 専用の変換キー
+- LLMによる日本語変換
+- 代替候補を表示する候補バー
+- 原文へ戻すUndo
+- OpenAI互換プロバイダーの設定
+- コンテナアプリでのAPIキーおよびモデル設定
+- キーボードの有効化と「フルアクセスを許可」の案内
+- フルアクセス未許可、ネットワーク障害、タイムアウト、認証情報不正の明確なエラー表示
 
-### Not included in the first release
+### 初回リリースに含めない機能
 
-- Flick keyboard layout
-- Ambient conversion
-- Local Mozc provisional conversion
-- Japanese-to-English translation
-- Cloud synchronization
-- User dictionary
-- Voice input
+- フリック入力配列
+- アンビエント変換
+- ローカルMozcによる仮確定
+- 日本語から英語への翻訳
+- クラウド同期
+- ユーザー辞書
+- 音声入力
 
-## 4. System architecture
+## 4. システム構成
 
-### Containing app
+### コンテナアプリ
 
-Responsibilities:
+役割：
 
-- Onboarding and keyboard setup instructions
-- Provider, endpoint, model, and API key configuration
-- Privacy explanation and consent
-- Conversion test screen
-- Diagnostics that do not record typed text
+- 初期設定およびキーボード設定手順の案内
+- プロバイダー、エンドポイント、モデル、APIキーの設定
+- プライバシーに関する説明と同意
+- 変換テスト画面
+- 入力内容を記録しない診断機能
 
-### Keyboard extension
+### キーボード拡張
 
-Responsibilities:
+役割：
 
-- Render QWERTY keys and candidate bar
-- Track text inserted by the current keyboard session
-- Determine the conversion target
-- Start and cancel conversion requests
-- Replace the source text with the selected result
-- Restore the source text with Undo
-- Show full-access and network error guidance
+- QWERTYキーと候補バーの表示
+- 現在のキーボードセッションで挿入した文字列の追跡
+- 変換対象の決定
+- 変換リクエストの開始とキャンセル
+- 原文から選択候補への置換
+- Undoによる原文の復元
+- フルアクセスおよびネットワークエラーの案内
 
 ### SumibiCore
 
-A shared Swift package or framework containing:
+次の機能を持つ共通Swiftパッケージまたはフレームワーク：
 
-- Conversion request and response models
-- Romaji input tracking
-- Conversion-target selection
-- Prompt construction
-- OpenAI-compatible HTTP client
-- Candidate parsing
-- Retry, timeout, and cancellation policy
-- Provider-independent error types
+- 変換リクエストとレスポンスのモデル
+- ローマ字入力の追跡
+- 変換対象の選択
+- プロンプトの構築
+- OpenAI互換HTTPクライアント
+- 候補の解析
+- 再試行、タイムアウト、キャンセルの方針
+- プロバイダーに依存しないエラー型
 
-### Shared configuration
+### 共有設定
 
-The containing app and keyboard extension use an App Group for non-secret settings. Secrets are stored using Keychain Sharing when supported by both targets.
+コンテナアプリとキーボード拡張は、機密情報ではない設定をApp Groupで共有する。両ターゲットで利用できる場合、秘密情報はKeychain Sharingを使って保存する。
 
-Proposed identifiers:
+識別子案：
 
-- App bundle: org.sumibi.Sumibi-iOS
-- Keyboard extension: org.sumibi.Sumibi-iOS.Keyboard
-- App Group: group.org.sumibi.Sumibi-iOS
+- アプリのバンドルID：`org.sumibi.Sumibi-iOS`
+- キーボード拡張：`org.sumibi.Sumibi-iOS.Keyboard`
+- App Group：`group.org.sumibi.Sumibi-iOS`
 
-These identifiers are provisional until the Apple Developer account configuration is confirmed.
+これらの識別子は、Apple Developerアカウントの設定が確定するまでの仮案とする。
 
-## 5. Conversion flow
+## 5. 変換の流れ
 
-1. The user types romaji or English with the Sumibi keyboard.
-2. The extension records only text that it inserted during the current valid composition session.
-3. The user taps Convert.
-4. The extension captures the source text and limited surrounding context.
-5. SumibiCore sends a conversion request to the configured provider.
-6. The source text remains visible while a progress state is shown.
-7. On success, the extension deletes the tracked source range and inserts the first candidate.
-8. Alternative candidates appear in the candidate bar.
-9. Undo restores the exact original source text.
+1. 利用者がSumibiキーボードでローマ字または英語を入力する。
+2. キーボード拡張は、現在の有効な入力セッションで自ら挿入した文字列だけを記録する。
+3. 利用者が変換キーを押す。
+4. キーボード拡張が原文と限定された周辺文脈を取得する。
+5. SumibiCoreが設定済みプロバイダーへ変換リクエストを送る。
+6. 進行状況を表示している間も原文は表示したままにする。
+7. 成功した場合、追跡中の原文を削除して第1候補を挿入する。
+8. 候補バーに代替候補を表示する。
+9. Undoで元の原文を正確に復元する。
 
-The tracked composition is invalidated when cursor movement, external edits, keyboard switching, or inconsistent document context makes replacement unsafe.
+カーソル移動、外部からの編集、キーボード切り替え、または文書コンテキストの不一致によって安全に置換できなくなった場合、追跡中の入力を無効化する。
 
-## 6. Keyboard UI
+## 6. キーボードUI
 
-Initial layout:
+初期配列：
 
-- Standard English QWERTY letter rows
-- Shift, delete, numbers/symbols, globe, space, return
-- A visually distinct Convert key
-- Candidate bar above the key rows
+- 標準的な英字QWERTYの文字列
+- Shift、削除、数字・記号、地球儀、空白、改行
+- 視覚的に区別できる変換キー
+- キー配列上部の候補バー
 
-Candidate bar states:
+候補バーの状態：
 
-- Idle: short guidance or hidden
-- Converting: progress indicator and Cancel
-- Success: converted candidate, alternatives, and Original
-- Error: concise message with Retry when appropriate
+- 待機中：短い案内を表示するか、候補バーを隠す
+- 変換中：進行状況とキャンセルを表示する
+- 成功：変換候補、代替候補、原文を表示する
+- エラー：簡潔なメッセージと、必要に応じて再試行を表示する
 
-## 7. Network and privacy
+## 7. ネットワークとプライバシー
 
-The keyboard requires Allow Full Access because conversion uses a network service and shared configuration. The app must explain this before directing the user to Settings.
+変換ではネットワークサービスと共有設定を利用するため、キーボードには「フルアクセスを許可」が必要になる。設定アプリへ誘導する前に、コンテナアプリ内でその理由を説明する。
 
-Privacy rules:
+プライバシー規則：
 
-- Send text only after the user taps Convert.
-- Send the smallest useful amount of surrounding context.
-- Never persist keystrokes or conversion source text in logs.
-- Never collect unrelated clipboard, contact, location, or identifier data.
-- Do not retain conversion requests on a Sumibi-operated server.
-- Redact API keys and input text from diagnostics.
+- 利用者が変換キーを押した場合に限り、文字列を送信する。
+- 送信する周辺文脈は、有用性を保てる最小量にする。
+- キー入力や変換対象の原文をログへ永続化しない。
+- 無関係なクリップボード、連絡先、位置情報、識別情報を収集しない。
+- Sumibiが運営するサーバーでは変換リクエストを保持しない。
+- 診断情報からAPIキーと入力内容を除外する。
 
-Known platform limits:
+既知のプラットフォーム制限：
 
-- iOS replaces third-party keyboards in secure text fields.
-- Some phone-number fields use the system keyboard.
-- Host apps can disable third-party keyboards.
-- Network and shared-container writes require Allow Full Access.
+- パスワードなどの安全な入力欄では、iOSが他社製キーボードをシステムキーボードへ置き換える。
+- 一部の電話番号入力欄ではシステムキーボードが使われる。
+- ホストアプリは他社製キーボードの利用を禁止できる。
+- ネットワーク通信と共有コンテナへの書き込みには「フルアクセスを許可」が必要になる。
 
-## 8. Error handling
+## 8. エラー処理
 
-- Full access disabled: show setup guidance without attempting a request.
-- Missing configuration: direct the user to the containing app.
-- Unauthorized response: report invalid API credentials.
-- Rate limit: provide Retry and preserve the source text.
-- Timeout or offline: preserve source text and allow Retry.
-- Cancellation: return to the unmodified source text.
-- Unsafe replacement state: show candidates without modifying host text.
+- フルアクセス未許可：リクエストを実行せず、設定手順を案内する。
+- 設定不足：利用者をコンテナアプリへ誘導する。
+- 認証エラー：API認証情報が無効であることを知らせる。
+- レート制限：原文を保持し、再試行を提示する。
+- タイムアウトまたはオフライン：原文を保持し、再試行できるようにする。
+- キャンセル：原文を変更せずに元の状態へ戻す。
+- 安全に置換できない状態：ホスト側の文字列を変更せず、候補だけを表示する。
 
-## 9. Testing strategy
+## 9. テスト方針
 
-- Unit tests for target detection, prompt generation, parsing, and error mapping
-- Mock URLProtocol tests for provider communication
-- Keyboard state-machine tests
-- UI tests in the containing app
-- Manual tests across common host apps
-- Device tests with and without Allow Full Access
-- Privacy tests ensuring input and credentials never appear in logs
+- 対象検出、プロンプト生成、解析、エラー変換の単体テスト
+- `URLProtocol`のモックを使ったプロバイダー通信テスト
+- キーボード状態機械のテスト
+- コンテナアプリのUIテスト
+- 主要なホストアプリでの手動テスト
+- フルアクセス許可あり・なしの実機テスト
+- 入力内容と認証情報がログへ出力されないことを確認するプライバシーテスト
 
-## 10. Milestones
+## 10. マイルストーン
 
-1. Xcode project with app and keyboard-extension targets
-2. App Group configuration and shared settings
-3. Minimal QWERTY keyboard that inserts and deletes text
-4. Composition tracking and Convert key
-5. Mock conversion client and candidate bar
-6. OpenAI-compatible API integration
-7. Undo, cancellation, and error handling
-8. Onboarding, privacy text, and device validation
+1. アプリとキーボード拡張のターゲットを持つXcodeプロジェクト
+2. App Groupの設定と共有設定
+3. 文字の挿入と削除ができる最小QWERTYキーボード
+4. 入力追跡と変換キー
+5. モック変換クライアントと候補バー
+6. OpenAI互換APIとの連携
+7. Undo、キャンセル、エラー処理
+8. 初期設定、プライバシー説明、実機検証
 
-## 11. Open decisions
+## 11. 未決事項
 
-- Minimum supported iOS version
-- Final bundle and App Group identifiers
-- First default provider and model
-- Maximum surrounding-context size
-- API-key sharing mechanism between app and extension
-- Whether candidate requests should return multiple candidates in one response
-- Licensing and App Store privacy disclosures
+- 対応する最低iOSバージョン
+- 最終的なバンドルIDとApp Group識別子
+- 初期状態で使用するプロバイダーとモデル
+- 周辺文脈の最大文字数
+- アプリとキーボード拡張の間でAPIキーを共有する方法
+- 1回のリクエストで複数候補を返すか
+- ライセンスとApp Storeのプライバシー申告
 
-## 12. Conversion target and composition tracking
+## 12. 変換対象と入力追跡
 
-### MVP decision
+### MVPでの決定
 
-The MVP converts only a composition that was inserted and is still owned by the
-current Sumibi keyboard session. It does not infer an arbitrary editable range
-from the host application's document.
+MVPでは、現在のSumibiキーボードセッションが挿入し、引き続き管理している入力だけを変換する。ホストアプリの文書から任意の編集範囲を推測してはならない。
 
-This is intentionally narrower than the Emacs version. A keyboard extension can
-read limited text around the cursor through the document proxy, but it does not
-own the host document or a stable selection range. Restricting replacement to
-tracked input avoids deleting unrelated text after cursor movement or host-side
-editing.
+これは意図的にEmacs版より狭い仕様である。キーボード拡張は文書プロキシを通してカーソル周辺の限られた文字列を読み取れるが、ホスト文書そのものや安定した選択範囲を所有していない。置換対象を追跡中の入力に限定することで、カーソル移動やホスト側の編集後に無関係な文字列を削除する事故を防ぐ。
 
-### Tracked composition
+### 追跡する入力
 
-`CompositionTracker` maintains:
+`CompositionTracker`は次の情報を保持する：
 
-- `source`: the exact text inserted by Sumibi since the last hard boundary
-- `revision`: a monotonically increasing local edit revision
-- `expectedSuffix`: a bounded suffix used to verify the cursor context
-- `isReplaceable`: whether automatic replacement is still safe
+- `source`：直近の確定境界以降にSumibiが挿入した正確な文字列
+- `revision`：単調増加するローカル編集リビジョン
+- `expectedSuffix`：カーソル位置の文脈を検証するための、長さを制限した末尾文字列
+- `isReplaceable`：自動置換を引き続き安全に実行できるか
 
-The tracker appends ordinary printable input. Delete removes the last extended
-grapheme cluster when the proxy context still matches. The tracker is cleared
-after return, keyboard switching, an explicit reset, or successful conversion.
+追跡処理は通常の表示可能文字を原文へ追加する。文書プロキシの文脈が一致している場合、削除キーは末尾の拡張書記素クラスタを1つ削除する。改行、キーボード切り替え、明示的なリセット、または変換成功後に追跡内容を消去する。
 
-Space and punctuation are retained in the composition so that a phrase such as
-`watashi ha kiyoka desu .` can be converted as one unit. Return is a hard
-boundary. To prevent unbounded requests, the tracker keeps at most 512
-characters for an MVP conversion target; older text may still be used as
-read-only context.
+`watashi ha kiyoka desu .`のような句を一単位として変換できるよう、空白と句読点も入力対象に含める。改行を確定境界とする。リクエストが際限なく大きくなるのを防ぐため、MVPの変換対象は最大512文字とする。それより前の文字列は、読み取り専用の周辺文脈として利用できる。
 
-### Safety validation
+### 安全性の検証
 
-Before starting a request and again before replacing text, the keyboard checks
-that the available `documentContextBeforeInput` ends with `expectedSuffix`.
-The second check also requires the same local `revision` captured by the
-request.
+リクエスト開始前と置換直前の両方で、取得できた`documentContextBeforeInput`の末尾が`expectedSuffix`と一致することを確認する。置換直前の検証では、リクエスト開始時に取得したローカルの`revision`とも一致しなければならない。
 
-If either check fails:
+どちらかの検証に失敗した場合：
 
-- do not delete or replace host text;
-- retain the returned candidates for manual inspection;
-- show a short message that the text changed;
-- allow the user to copy or dismiss the result;
-- start a fresh composition with the next key input.
+- ホスト側の文字列を削除または置換しない。
+- 返された候補は手動確認用として保持する。
+- 入力内容が変更されたことを短いメッセージで知らせる。
+- 結果をコピーまたは閉じられるようにする。
+- 次のキー入力から新しい入力追跡を開始する。
 
-This rule covers cursor movement, edits made by the host app, Dictation, text
-replacement, and continued typing while a request is in flight.
+この規則により、カーソル移動、ホストアプリからの編集、音声入力、テキスト置換、リクエスト中の追加入力を安全に処理できる。
 
-### Replacement
+### 置換
 
-On a valid result:
+有効な結果を受け取った場合：
 
-1. Revalidate the tracked suffix and request revision.
-2. Call `deleteBackward()` once per extended grapheme cluster in `source`.
-3. Insert the selected candidate.
-4. Store an `UndoRecord` containing the original, replacement, and a new
-   expected suffix.
-5. Clear the active composition.
+1. 追跡中の末尾文字列とリクエストのリビジョンを再検証する。
+2. `source`に含まれる拡張書記素クラスタごとに`deleteBackward()`を1回呼び出す。
+3. 選択された候補を挿入する。
+4. 原文、置換結果、新しい期待末尾文字列を含む`UndoRecord`を保存する。
+5. 変換中の入力追跡を消去する。
 
-Deletion is grapheme-based rather than UTF-16-length-based so that emoji and
-combined characters do not cause an incorrect number of delete operations.
+削除回数はUTF-16の長さではなく拡張書記素クラスタを基準にする。これにより、絵文字や結合文字によって削除回数が不正確になることを防ぐ。
 
 ### Undo
 
-Undo is available only while the cursor remains directly after the exact
-replacement inserted by Sumibi. It performs the same suffix validation, deletes
-the replacement by extended grapheme cluster, and reinserts the original source.
-Any unrelated insertion, deletion, cursor movement, keyboard switch, or new
-conversion invalidates the `UndoRecord`.
+カーソルがSumibiの挿入した正確な置換結果の直後にある場合に限り、Undoを利用できる。同じ末尾文字列検証を行い、置換結果を拡張書記素クラスタ単位で削除して原文を再挿入する。無関係な挿入や削除、カーソル移動、キーボード切り替え、新しい変換のいずれかが発生した場合、`UndoRecord`を無効化する。
 
-### Explicit non-goals for the MVP
+### MVPで明示的に対象外とする事項
 
-- Converting an arbitrary selection created in the host application
-- Reconstructing an entire document from proxy context
-- Replacing text after validation fails
-- Ambient conversion
+- ホストアプリで選択した任意範囲の変換
+- 文書プロキシの文脈から文書全体を再構築する処理
+- 安全性の検証に失敗した後の文字列置換
+- アンビエント変換
 
-## 13. Keyboard state machine
+## 13. キーボード状態機械
 
-The UI and controller use one explicit state value. Network callbacks carry a
-request ID and are ignored when they no longer match the active request.
+UIとコントローラーは、1つの明示的な状態値を使用する。ネットワークのコールバックにはリクエストIDを持たせ、実行中のリクエストと一致しなくなった場合は無視する。
 
-### States
+### 状態
 
-- `idle`: no tracked input
-- `composing`: tracked input is valid and Convert is enabled
-- `converting`: one request is active; source text remains unchanged
-- `candidates`: conversion succeeded and alternatives are available
-- `staleResult`: conversion succeeded but the source is no longer replaceable
-- `error`: the request failed without modifying the source
+- `idle`：追跡中の入力がない
+- `composing`：追跡中の入力が有効で、変換を実行できる
+- `converting`：1件のリクエストを実行中で、原文は未変更
+- `candidates`：変換に成功し、代替候補を利用できる
+- `staleResult`：変換には成功したが、原文を安全に置換できない
+- `error`：原文を変更せずにリクエストが失敗した
 
-### Transitions
+### 状態遷移
 
-| Current state | Event | Next state | Effect |
+| 現在の状態 | 事象 | 次の状態 | 処理 |
 | --- | --- | --- | --- |
-| `idle` | printable key | `composing` | Insert and begin tracking |
-| `composing` | printable key or delete | `composing` | Insert/delete and increment revision |
-| `composing` | Convert | `converting` | Validate, snapshot, and start request |
-| `converting` | Cancel | `composing` | Cancel request; preserve source |
-| `converting` | key input | `composing` | Cancel or supersede request; preserve responsiveness |
-| `converting` | valid response | `candidates` | Replace with first candidate and create Undo record |
-| `converting` | response after edit mismatch | `staleResult` | Never modify host text |
-| `converting` | failure | `error` | Preserve source and offer Retry |
-| `error` | Retry | `converting` | Revalidate and issue a new request |
-| `candidates` | alternative selected | `candidates` | Safely replace the current Sumibi result |
-| `candidates` | Original/Undo | `composing` | Restore the exact source |
-| any | context validation failure | `idle` or `staleResult` | Invalidate automatic replacement |
+| `idle` | 表示可能文字の入力 | `composing` | 文字を挿入して追跡を開始する |
+| `composing` | 表示可能文字の入力または削除 | `composing` | 挿入または削除を行い、リビジョンを増やす |
+| `composing` | 変換 | `converting` | 検証してスナップショットを作り、リクエストを開始する |
+| `converting` | キャンセル | `composing` | リクエストをキャンセルし、原文を保持する |
+| `converting` | キー入力 | `composing` | リクエストをキャンセルまたは無効化し、応答性を保つ |
+| `converting` | 有効な応答 | `candidates` | 第1候補へ置換し、Undo記録を作成する |
+| `converting` | 編集不一致後の応答 | `staleResult` | ホスト側の文字列を変更しない |
+| `converting` | 失敗 | `error` | 原文を保持して再試行を提示する |
+| `error` | 再試行 | `converting` | 再検証して新しいリクエストを開始する |
+| `candidates` | 代替候補を選択 | `candidates` | 現在のSumibi変換結果を安全に置換する |
+| `candidates` | 原文またはUndo | `composing` | 正確な原文を復元する |
+| すべて | 文脈の検証失敗 | `idle`または`staleResult` | 自動置換を無効化する |
 
-### Concurrency rules
+### 並行処理の規則
 
-- At most one request controls automatic replacement.
-- Starting a new request cancels the previous task and changes the request ID.
-- Cancellation is cooperative; a late response is ignored.
-- Main-actor state changes are serialized.
-- Source text is never removed merely to show a progress state.
-- Retry creates a new request ID and rechecks document context.
+- 自動置換を制御できるリクエストは同時に1件だけとする。
+- 新しいリクエストを開始するときは、前のタスクをキャンセルしてリクエストIDを更新する。
+- キャンセルは協調的に行い、遅れて届いた応答は無視する。
+- Main Actor上で状態変更を直列化する。
+- 進行状況を表示するためだけに原文を削除してはならない。
+- 再試行では新しいリクエストIDを発行し、文書コンテキストを再検証する。
 
-### Candidate behavior
+### 候補の挙動
 
-The first valid response is inserted immediately to preserve the modeless Sumibi
-workflow. The candidate bar then shows alternatives and `Original`. Selecting
-another candidate is allowed only while the current inserted result still
-matches the expected suffix. Otherwise the state becomes `staleResult` and no
-replacement occurs.
+モードレスなSumibiの操作感を保つため、有効な最初の応答を直ちに挿入する。その後、候補バーに代替候補と「原文」を表示する。別の候補を選択できるのは、現在挿入されている結果と期待末尾文字列が一致する場合に限る。一致しない場合は`staleResult`へ移行し、置換しない。
 
-For the initial API contract, one request should return up to three ordered
-candidates. If a provider returns only one result, the candidate bar still
-offers `Original`.
+初期のAPI契約では、1回のリクエストにつき優先順位を付けた候補を最大3件返す。プロバイダーが候補を1件だけ返した場合でも、候補バーには「原文」を表示する。
