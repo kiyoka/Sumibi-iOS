@@ -1,0 +1,492 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* SumibiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* SumibiApp.swift */; };
+		A10000000000000000000002 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* KeyboardViewController.swift */; };
+		A10000000000000000000003 /* SumibiCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* SumibiCore.swift */; };
+		A10000000000000000000004 /* SumibiKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* SumibiKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000005 /* SumibiCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SumibiCore.framework */; };
+		A10000000000000000000006 /* SumibiCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SumibiCore.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000002;
+			remoteInfo = SumibiKeyboard;
+		};
+		A30000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000003;
+			remoteInfo = SumibiCore;
+		};
+		A30000000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000003;
+			remoteInfo = SumibiCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A60000000000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000004 /* SumibiKeyboard.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* SumibiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SumibiApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* SumibiCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SumibiCore.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000005 /* SumibiKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SumibiKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000006 /* SumibiCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SumibiCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000007 /* Sumibi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sumibi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A70000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000005 /* SumibiCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A70000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000006 /* SumibiCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A70000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A80000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A80000000000000000000002 /* SumibiApp */,
+				A80000000000000000000003 /* SumibiKeyboard */,
+				A80000000000000000000004 /* SumibiCore */,
+				A80000000000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A80000000000000000000002 /* SumibiApp */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* SumibiApp.swift */,
+			);
+			path = SumibiApp;
+			sourceTree = "<group>";
+		};
+		A80000000000000000000003 /* SumibiKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000002 /* KeyboardViewController.swift */,
+				A20000000000000000000004 /* Info.plist */,
+			);
+			path = SumibiKeyboard;
+			sourceTree = "<group>";
+		};
+		A80000000000000000000004 /* SumibiCore */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000003 /* SumibiCore.swift */,
+			);
+			path = SumibiCore;
+			sourceTree = "<group>";
+		};
+		A80000000000000000000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000007 /* Sumibi.app */,
+				A20000000000000000000005 /* SumibiKeyboard.appex */,
+				A20000000000000000000006 /* SumibiCore.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* SumibiApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A90000000000000000000002 /* Build configuration list for PBXNativeTarget "SumibiApp" */;
+			buildPhases = (
+				AA0000000000000000000001 /* Sources */,
+				A70000000000000000000001 /* Frameworks */,
+				AB0000000000000000000001 /* Resources */,
+				A60000000000000000000001 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AC0000000000000000000001 /* PBXTargetDependency */,
+				AC0000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = SumibiApp;
+			productName = Sumibi;
+			productReference = A20000000000000000000007 /* Sumibi.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000002 /* SumibiKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A90000000000000000000003 /* Build configuration list for PBXNativeTarget "SumibiKeyboard" */;
+			buildPhases = (
+				AA0000000000000000000002 /* Sources */,
+				A70000000000000000000002 /* Frameworks */,
+				AB0000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AC0000000000000000000003 /* PBXTargetDependency */,
+			);
+			name = SumibiKeyboard;
+			productName = SumibiKeyboard;
+			productReference = A20000000000000000000005 /* SumibiKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A50000000000000000000003 /* SumibiCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A90000000000000000000004 /* Build configuration list for PBXNativeTarget "SumibiCore" */;
+			buildPhases = (
+				AA0000000000000000000003 /* Sources */,
+				A70000000000000000000003 /* Frameworks */,
+				AB0000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SumibiCore;
+			productName = SumibiCore;
+			productReference = A20000000000000000000006 /* SumibiCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A40000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					A50000000000000000000002 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					A50000000000000000000003 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "Sumibi-iOS" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ja;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				ja,
+				Base,
+			);
+			mainGroup = A80000000000000000000001;
+			productRefGroup = A80000000000000000000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A50000000000000000000001 /* SumibiApp */,
+				A50000000000000000000002 /* SumibiKeyboard */,
+				A50000000000000000000003 /* SumibiCore */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AB0000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA0000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* SumibiApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000002 /* KeyboardViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000003 /* SumibiCore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AC0000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000002 /* SumibiKeyboard */;
+			targetProxy = A30000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		AC0000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000003 /* SumibiCore */;
+			targetProxy = A30000000000000000000002 /* PBXContainerItemProxy */;
+		};
+		AC0000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000003 /* SumibiCore */;
+			targetProxy = A30000000000000000000003 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AD0000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		AD0000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		AD0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS;
+				PRODUCT_NAME = Sumibi;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AD0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS;
+				PRODUCT_NAME = Sumibi;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AD0000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Keyboard;
+				PRODUCT_NAME = SumibiKeyboard;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AD0000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Keyboard;
+				PRODUCT_NAME = SumibiKeyboard;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AD0000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Core;
+				PRODUCT_NAME = SumibiCore;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AD0000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Core;
+				PRODUCT_NAME = SumibiCore;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A90000000000000000000001 /* Build configuration list for PBXProject "Sumibi-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD0000000000000000000001 /* Debug */,
+				AD0000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A90000000000000000000002 /* Build configuration list for PBXNativeTarget "SumibiApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD0000000000000000000003 /* Debug */,
+				AD0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A90000000000000000000003 /* Build configuration list for PBXNativeTarget "SumibiKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD0000000000000000000005 /* Debug */,
+				AD0000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A90000000000000000000004 /* Build configuration list for PBXNativeTarget "SumibiCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD0000000000000000000007 /* Debug */,
+				AD0000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A40000000000000000000001 /* Project object */;
+}
