@@ -76,7 +76,19 @@ Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語�
 
 ### 共有設定
 
-コンテナアプリとキーボード拡張は、機密情報ではない設定をApp Groupで共有する。両ターゲットで利用できる場合、秘密情報はKeychain Sharingを使って保存する。
+コンテナアプリとキーボード拡張は、機密情報ではない設定をApp Groupの`UserDefaults`で共有する。APIキーは共有UserDefaultsや共有ファイルへ保存せず、App Groupをアクセスグループとして利用する共有Keychainへ保存する。
+
+APIキー共有の規則：
+
+- APIキーの入力、更新、削除はコンテナアプリだけで行う。
+- キーボード拡張は変換時の読み取りだけを行う。
+- Keychain項目のアクセスグループには`group.org.sumibi.Sumibi-iOS`を明示する。
+- 保護属性には`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`を使う。
+- `kSecAttrSynchronizable`を無効にし、iCloud Keychainで同期しない。
+- 端末間のバックアップ移行を行わない。新しい端末ではAPIキーの再入力を求める。
+- 「フルアクセスを許可」が無効な場合、キーボード拡張はAPIキーを取得・使用しない。
+- APIキーをログ、エラー文、診断情報へ出力しない。
+- Face IDまたはTouch IDによる毎回の認証は、IMEの操作性を損なうため要求しない。
 
 識別子案：
 
@@ -173,7 +185,6 @@ Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語�
 - 最終的なバンドルIDとApp Group識別子
 - 初期状態で使用するプロバイダーとモデル
 - 周辺文脈の最大文字数
-- アプリとキーボード拡張の間でAPIキーを共有する方法
 - 1回のリクエストで複数候補を返すか
 - ライセンスとApp Storeのプライバシー申告
 
