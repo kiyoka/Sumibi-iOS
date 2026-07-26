@@ -4,12 +4,22 @@ import UIKit
 final class KeyboardViewController: UIInputViewController {
     private lazy var sharedSettings = SharedSettingsStore()
     private var letterButtons: [UIButton] = []
+    private var compositionTracker = CompositionTracker()
+    private var pendingConversion: ConversionSnapshot?
+    private var convertButton: UIButton?
     private var isShifted = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
         _ = sharedSettings?.loadProviderConfiguration()
         configureKeyboard()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        compositionTracker.reset()
+        pendingConversion = nil
+        refreshConvertButton()
     }
 
     private func configureKeyboard() {
@@ -72,18 +82,26 @@ final class KeyboardViewController: UIInputViewController {
             accessibilityLabel: "空白",
             action: #selector(spaceTapped)
         )
+        let convertButton = makeSpecialButton(
+            title: "変換",
+            accessibilityLabel: "変換",
+            action: #selector(convertTapped)
+        )
         let returnButton = makeSpecialButton(
             title: "改行",
             accessibilityLabel: "改行",
             action: #selector(returnTapped)
         )
+        self.convertButton = convertButton
+        refreshConvertButton()
 
-        let row = makeRow([nextKeyboardButton, spaceButton, returnButton])
+        let row = makeRow([nextKeyboardButton, spaceButton, convertButton, returnButton])
         row.distribution = .fill
         spaceButton.widthAnchor.constraint(
             equalTo: nextKeyboardButton.widthAnchor,
-            multiplier: 4
+            multiplier: 3
         ).isActive = true
+        convertButton.widthAnchor.constraint(equalTo: nextKeyboardButton.widthAnchor).isActive = true
         returnButton.widthAnchor.constraint(equalTo: nextKeyboardButton.widthAnchor).isActive = true
         return row
     }
@@ -150,11 +168,35 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    private func insertTrackedText(_ text: String) {
+        if compositionTracker.hasComposition,
+           !compositionTracker.matches(
+               documentContextBeforeInput: textDocumentProxy.documentContextBeforeInput
+           ) {
+            compositionTracker.reset()
+            pendingConversion = nil
+        }
+
+        textDocumentProxy.insertText(text)
+        compositionTracker.append(text)
+        pendingConversion = nil
+        refreshConvertButton()
+    }
+
+    private func refreshConvertButton() {
+        let isEnabled = compositionTracker.hasComposition && compositionTracker.isReplaceable
+        convertButton?.isEnabled = isEnabled
+        convertButton?.alpha = isEnabled ? 1 : 0.45
+        convertButton?.accessibilityValue = isEnabled
+            ? "変換対象\(compositionTracker.source.count)文字"
+            : "変換対象なし"
+    }
+
     @objc private func letterTapped(_ sender: UIButton) {
         guard let letter = sender.accessibilityIdentifier else {
             return
         }
-        textDocumentProxy.insertText(displayedLetter(letter))
+        insertTrackedText(displayedLetter(letter))
 
         if isShifted {
             isShifted = false
@@ -168,14 +210,44 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func deleteTapped() {
+        if compositionTracker.matches(
+            documentContextBeforeInput: textDocumentProxy.documentContextBeforeInput
+        ) {
+            compositionTracker.deleteLast()
+        } else {
+            compositionTracker.reset()
+        }
         textDocumentProxy.deleteBackward()
+        pendingConversion = nil
+        refreshConvertButton()
     }
 
     @objc private func spaceTapped() {
-        textDocumentProxy.insertText(" ")
+        insertTrackedText(" ")
+    }
+
+    @objc private func convertTapped() {
+        guard
+            compositionTracker.matches(
+                documentContextBeforeInput: textDocumentProxy.documentContextBeforeInput
+            ),
+            let snapshot = compositionTracker.snapshot()
+        else {
+            compositionTracker.invalidate()
+            pendingConversion = nil
+            refreshConvertButton()
+            return
+        }
+
+        pendingConversion = snapshot
+        convertButton?.accessibilityValue = "変換準備済み、\(snapshot.source.count)文字"
+        UIAccessibility.post(notification: .announcement, argument: "変換対象を準備しました")
     }
 
     @objc private func returnTapped() {
         textDocumentProxy.insertText("\n")
+        compositionTracker.reset()
+        pendingConversion = nil
+        refreshConvertButton()
     }
 }

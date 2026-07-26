@@ -15,6 +15,7 @@
 		A10000000000000000000006 /* SumibiCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SumibiCore.framework */; };
 		A10000000000000000000007 /* SharedSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* SharedSettings.swift */; };
 		A10000000000000000000008 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* APIKeyStore.swift */; };
+		A10000000000000000000009 /* CompositionTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* CompositionTracker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 		A20000000000000000000009 /* SumibiApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SumibiApp.entitlements; sourceTree = "<group>"; };
 		A2000000000000000000000A /* SumibiKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SumibiKeyboard.entitlements; sourceTree = "<group>"; };
 		A2000000000000000000000B /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
+		A2000000000000000000000C /* CompositionTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionTracker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000000000000000000000B /* APIKeyStore.swift */,
+				A2000000000000000000000C /* CompositionTracker.swift */,
 				A20000000000000000000003 /* SumibiCore.swift */,
 				A20000000000000000000008 /* SharedSettings.swift */,
 			);
@@ -290,6 +293,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000008 /* APIKeyStore.swift in Sources */,
+				A10000000000000000000009 /* CompositionTracker.swift in Sources */,
 				A10000000000000000000003 /* SumibiCore.swift in Sources */,
 				A10000000000000000000007 /* SharedSettings.swift in Sources */,
 			);
