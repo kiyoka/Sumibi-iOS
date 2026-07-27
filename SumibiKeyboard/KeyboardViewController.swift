@@ -52,6 +52,7 @@ final class KeyboardViewController: UIInputViewController {
             makeLetterRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
             makeLetterRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"]),
             makeThirdRow(),
+            makeSymbolRow(),
             makeBottomRow(),
         ])
         keyRows.axis = .vertical
@@ -72,7 +73,7 @@ final class KeyboardViewController: UIInputViewController {
             keyboardStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
             keyboardStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
             keyboardStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
-            view.heightAnchor.constraint(greaterThanOrEqualToConstant: 264),
+            view.heightAnchor.constraint(greaterThanOrEqualToConstant: 312),
         ])
         showCandidateMessage("ローマ字を入力して変換")
     }
@@ -125,6 +126,10 @@ final class KeyboardViewController: UIInputViewController {
         )
         let letters = ["z", "x", "c", "v", "b", "n", "m"].map(makeLetterButton)
         return makeRow([shiftButton] + letters + [deleteButton])
+    }
+
+    private func makeSymbolRow() -> UIStackView {
+        makeRow([",", ".", "/", "?"].map(makeSymbolButton))
     }
 
     private func makeBottomRow() -> UIStackView {
@@ -183,6 +188,16 @@ final class KeyboardViewController: UIInputViewController {
         button.accessibilityIdentifier = letter
         button.addTarget(self, action: #selector(letterTapped), for: .touchUpInside)
         letterButtons.append(button)
+        return button
+    }
+
+    private func makeSymbolButton(_ symbol: String) -> UIButton {
+        let button = makeKeyButton(
+            title: symbol,
+            accessibilityLabel: "記号 \(symbol)"
+        )
+        button.accessibilityIdentifier = symbol
+        button.addTarget(self, action: #selector(symbolTapped), for: .touchUpInside)
         return button
     }
 
@@ -513,6 +528,13 @@ final class KeyboardViewController: UIInputViewController {
             isShifted = false
             refreshLetterTitles()
         }
+    }
+
+    @objc private func symbolTapped(_ sender: UIButton) {
+        guard let symbol = sender.accessibilityIdentifier else {
+            return
+        }
+        insertTrackedText(symbol)
     }
 
     @objc private func shiftTapped() {
