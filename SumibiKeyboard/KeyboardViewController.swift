@@ -84,6 +84,13 @@ final class KeyboardViewController: UIInputViewController {
         container.backgroundColor = .secondarySystemBackground
         container.layer.cornerRadius = 8
 
+        let iconView = UIImageView(image: UIImage(named: "AppIcon"))
+        iconView.contentMode = .scaleAspectFit
+        iconView.layer.cornerRadius = 6
+        iconView.clipsToBounds = true
+        iconView.isAccessibilityElement = false
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -93,11 +100,16 @@ final class KeyboardViewController: UIInputViewController {
         candidateStack.alignment = .center
         candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
+        container.addSubview(iconView)
         container.addSubview(scrollView)
         scrollView.addSubview(candidateStack)
         NSLayoutConstraint.activate([
+            iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 6),
+            iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 28),
+            iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
             scrollView.topAnchor.constraint(equalTo: container.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            scrollView.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             candidateStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
