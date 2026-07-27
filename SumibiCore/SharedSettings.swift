@@ -1,12 +1,16 @@
 import Foundation
 
 public struct ProviderConfiguration: Codable, Equatable, Sendable {
+    public static let defaultEndpoint = "https://api.openai.com"
     public static let defaultModel = "gpt-5.6-terra"
 
     public var endpoint: String
     public var model: String
 
-    public init(endpoint: String = "", model: String = Self.defaultModel) {
+    public init(
+        endpoint: String = Self.defaultEndpoint,
+        model: String = Self.defaultModel
+    ) {
         self.endpoint = endpoint
         self.model = model
     }
@@ -41,13 +45,18 @@ public struct SharedSettingsStore {
         else {
             return ProviderConfiguration()
         }
-        if configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return ProviderConfiguration(
-                endpoint: configuration.endpoint,
-                model: ProviderConfiguration.defaultModel
-            )
-        }
-        return configuration
+        let endpoint = configuration.endpoint
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = configuration.model
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return ProviderConfiguration(
+            endpoint: endpoint.isEmpty
+                ? ProviderConfiguration.defaultEndpoint
+                : configuration.endpoint,
+            model: model.isEmpty
+                ? ProviderConfiguration.defaultModel
+                : configuration.model
+        )
     }
 
     public func saveProviderConfiguration(_ configuration: ProviderConfiguration) throws {

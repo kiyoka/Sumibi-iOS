@@ -12,7 +12,7 @@ struct SumibiApp: App {
 }
 
 private struct ContentView: View {
-    @State private var endpoint = ""
+    @State private var endpoint = ProviderConfiguration.defaultEndpoint
     @State private var model = ProviderConfiguration.defaultModel
     @State private var apiKey = ""
     @State private var hasStoredAPIKey = false
