@@ -2,11 +2,18 @@ import Foundation
 
 public struct ConversionSnapshot: Equatable, Sendable {
     public let source: String
+    public let textToReplace: String
     public let revision: UInt64
     public let expectedSuffix: String
 
-    public init(source: String, revision: UInt64, expectedSuffix: String) {
+    public init(
+        source: String,
+        textToReplace: String? = nil,
+        revision: UInt64,
+        expectedSuffix: String
+    ) {
         self.source = source
+        self.textToReplace = textToReplace ?? source
         self.revision = revision
         self.expectedSuffix = expectedSuffix
     }
@@ -88,10 +95,26 @@ public struct CompositionTracker: Equatable, Sendable {
         guard isReplaceable, !source.isEmpty else {
             return nil
         }
+
+        let conversionSource: String
+        let textToReplace: String
+        if let boundary = source.lastIndex(of: "/") {
+            let targetStart = source.index(after: boundary)
+            conversionSource = String(source[targetStart...])
+            textToReplace = String(source[boundary...])
+        } else {
+            conversionSource = source
+            textToReplace = source
+        }
+        guard !conversionSource.isEmpty else {
+            return nil
+        }
+
         return ConversionSnapshot(
-            source: source,
+            source: conversionSource,
+            textToReplace: textToReplace,
             revision: revision,
-            expectedSuffix: expectedSuffix
+            expectedSuffix: String(textToReplace.suffix(maximumSuffixLength))
         )
     }
 }
