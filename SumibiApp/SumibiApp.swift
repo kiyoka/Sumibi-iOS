@@ -17,7 +17,7 @@ private struct ContentView: View {
     @State private var apiKey = ""
     @State private var hasStoredAPIKey = false
     @State private var statusMessage = ""
-    @State private var testSource = "watashi ha kiyoka desu ."
+    @State private var testSource = "sumibi yakiniku ga sukidesu ."
     @State private var testResult = ""
     @State private var isTesting = false
 
