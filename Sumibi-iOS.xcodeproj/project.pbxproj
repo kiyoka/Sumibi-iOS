@@ -365,7 +365,7 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -373,7 +373,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -389,7 +389,7 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -397,7 +397,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -413,12 +413,12 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -433,12 +433,12 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -458,7 +458,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACH_O_TYPE = staticlib;
-				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Core;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Core";
 				PRODUCT_NAME = SumibiCore;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -478,7 +478,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACH_O_TYPE = staticlib;
-				PRODUCT_BUNDLE_IDENTIFIER = org.sumibi.Sumibi-iOS.Core;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Core";
 				PRODUCT_NAME = SumibiCore;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

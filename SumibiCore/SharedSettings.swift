@@ -1,10 +1,12 @@
 import Foundation
 
 public struct ProviderConfiguration: Codable, Equatable, Sendable {
+    public static let defaultModel = "gpt-5.6-terra"
+
     public var endpoint: String
     public var model: String
 
-    public init(endpoint: String = "", model: String = "") {
+    public init(endpoint: String = "", model: String = Self.defaultModel) {
         self.endpoint = endpoint
         self.model = model
     }
@@ -38,6 +40,12 @@ public struct SharedSettingsStore {
             let configuration = try? decoder.decode(ProviderConfiguration.self, from: data)
         else {
             return ProviderConfiguration()
+        }
+        if configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ProviderConfiguration(
+                endpoint: configuration.endpoint,
+                model: ProviderConfiguration.defaultModel
+            )
         }
         return configuration
     }
