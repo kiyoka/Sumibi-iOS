@@ -4,6 +4,7 @@ import UIKit
 final class KeyboardViewController: UIInputViewController {
     private struct CandidateSession {
         let original: String
+        let undoOriginal: String
         let options: [String]
         var current: String
     }
@@ -361,13 +362,12 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshConvertButton() {
-        let isEnabled = compositionTracker.hasComposition
-            && compositionTracker.isReplaceable
-            && activeRequestID == nil
+        let snapshot = compositionTracker.snapshot()
+        let isEnabled = snapshot != nil && activeRequestID == nil
         convertButton?.isEnabled = isEnabled
         convertButton?.alpha = isEnabled ? 1 : 0.45
         convertButton?.accessibilityValue = isEnabled
-            ? "変換対象\(compositionTracker.source.count)文字"
+            ? "変換対象\(snapshot?.source.count ?? 0)文字"
             : "変換対象なし"
     }
 
@@ -419,19 +419,20 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        replaceHostText(snapshot.source, with: firstCandidate)
+        replaceHostText(snapshot.textToReplace, with: firstCandidate)
         var options = candidates
         if !options.contains(snapshot.source) {
             options.append(snapshot.source)
         }
         candidateSession = CandidateSession(
             original: snapshot.source,
+            undoOriginal: snapshot.textToReplace,
             options: options,
             current: firstCandidate
         )
-        undoRecord = firstCandidate == snapshot.source
+        undoRecord = firstCandidate == snapshot.textToReplace
             ? nil
-            : UndoRecord(original: snapshot.source, replacement: firstCandidate)
+            : UndoRecord(original: snapshot.textToReplace, replacement: firstCandidate)
         retrySnapshot = nil
         pendingConversion = nil
         compositionTracker.reset()
@@ -589,9 +590,13 @@ final class KeyboardViewController: UIInputViewController {
         showConverting()
         refreshConvertButton()
 
+        let contextBeforeInput = textDocumentProxy.documentContextBeforeInput ?? ""
+        let surroundingContext = contextBeforeInput.hasSuffix(snapshot.textToReplace)
+            ? String(contextBeforeInput.dropLast(snapshot.textToReplace.count))
+            : ""
         let request = ConversionRequest(
             source: snapshot.source,
-            surroundingContext: textDocumentProxy.documentContextBeforeInput ?? ""
+            surroundingContext: surroundingContext
         )
         conversionTask = Task { [weak self, conversionClient] in
             do {
@@ -686,9 +691,9 @@ final class KeyboardViewController: UIInputViewController {
         replaceHostText(session.current, with: replacement)
         session.current = replacement
         candidateSession = session
-        undoRecord = replacement == session.original
+        undoRecord = replacement == session.undoOriginal
             ? nil
-            : UndoRecord(original: session.original, replacement: replacement)
+            : UndoRecord(original: session.undoOriginal, replacement: replacement)
         showCandidates()
     }
 
