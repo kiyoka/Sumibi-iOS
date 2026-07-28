@@ -124,10 +124,10 @@ final class KeyboardViewController: UIInputViewController {
         container.backgroundColor = .secondarySystemBackground
         container.layer.cornerRadius = 8
 
-        let iconView = UIImageView(image: UIImage(named: "AppIcon"))
+        let icon = UIImage(named: "KeyboardIcon")?.withRenderingMode(.alwaysTemplate)
+        let iconView = UIImageView(image: icon)
         iconView.contentMode = .scaleAspectFit
-        iconView.layer.cornerRadius = 6
-        iconView.clipsToBounds = true
+        iconView.tintColor = .label
         iconView.isAccessibilityElement = false
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
