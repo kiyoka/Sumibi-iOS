@@ -63,7 +63,7 @@ final class KeyboardViewController: UIInputViewController {
         let keyRows = UIStackView(arrangedSubviews: [
             makeNumberRow(),
             makeLetterRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
-            makeLetterRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"]),
+            makeSecondRow(),
             makeThirdRow(),
             makeSymbolRow(),
             makeBottomRow(),
@@ -170,6 +170,11 @@ final class KeyboardViewController: UIInputViewController {
         makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map(makeNumberButton))
     }
 
+    private func makeSecondRow() -> UIStackView {
+        let letters = ["a", "s", "d", "f", "g", "h", "j", "k", "l"].map(makeLetterButton)
+        return makeRow(letters + [makeSymbolButton("-")])
+    }
+
     private func makeThirdRow() -> UIStackView {
         let shiftButton = makeSpecialButton(
             title: "⇧",
@@ -186,7 +191,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeSymbolRow() -> UIStackView {
-        makeRow([",", ".", "/", "?", "!", "-"].map(makeSymbolButton))
+        makeRow([",", ".", "/", "?", "!"].map(makeSymbolButton))
     }
 
     private func makeBottomRow() -> UIStackView {
