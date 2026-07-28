@@ -25,6 +25,12 @@ final class KeyboardViewController: UIInputViewController {
     private var conversionTask: Task<Void, Never>?
     private var activeRequestID: UUID?
     private var convertButton: UIButton?
+    private var keyRowsStack: UIStackView?
+    private var keyboardStack: UIStackView?
+    private var candidateBarHeightConstraint: NSLayoutConstraint?
+    private var keyboardStackTopConstraint: NSLayoutConstraint?
+    private var keyboardStackBottomConstraint: NSLayoutConstraint?
+    private var keyboardHeightConstraint: NSLayoutConstraint?
     private var isShifted = false
 
     override func viewDidLoad() {
@@ -46,10 +52,16 @@ final class KeyboardViewController: UIInputViewController {
         refreshConvertButton()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateKeyboardHeight()
+    }
+
     private func configureKeyboard() {
         view.backgroundColor = .systemGray5
 
         let keyRows = UIStackView(arrangedSubviews: [
+            makeNumberRow(),
             makeLetterRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
             makeLetterRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"]),
             makeThirdRow(),
@@ -59,6 +71,7 @@ final class KeyboardViewController: UIInputViewController {
         keyRows.axis = .vertical
         keyRows.spacing = 8
         keyRows.distribution = .fillEqually
+        keyRowsStack = keyRows
 
         let candidateBar = makeCandidateBar()
         let keyboardStack = UIStackView(arrangedSubviews: [candidateBar, keyRows])
@@ -66,17 +79,44 @@ final class KeyboardViewController: UIInputViewController {
         keyboardStack.spacing = 8
         keyboardStack.distribution = .fill
         keyboardStack.translatesAutoresizingMaskIntoConstraints = false
+        self.keyboardStack = keyboardStack
 
         view.addSubview(keyboardStack)
+        let candidateBarHeightConstraint = candidateBar.heightAnchor.constraint(equalToConstant: 40)
+        let keyboardStackTopConstraint = keyboardStack.topAnchor.constraint(
+            equalTo: view.topAnchor,
+            constant: 8
+        )
+        let keyboardStackBottomConstraint = keyboardStack.bottomAnchor.constraint(
+            equalTo: view.bottomAnchor,
+            constant: -8
+        )
+        let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: 352)
+        self.candidateBarHeightConstraint = candidateBarHeightConstraint
+        self.keyboardStackTopConstraint = keyboardStackTopConstraint
+        self.keyboardStackBottomConstraint = keyboardStackBottomConstraint
+        self.keyboardHeightConstraint = keyboardHeightConstraint
         NSLayoutConstraint.activate([
-            candidateBar.heightAnchor.constraint(equalToConstant: 40),
-            keyboardStack.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
+            candidateBarHeightConstraint,
+            keyboardStackTopConstraint,
             keyboardStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
             keyboardStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-            keyboardStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
-            view.heightAnchor.constraint(greaterThanOrEqualToConstant: 312),
+            keyboardStackBottomConstraint,
+            keyboardHeightConstraint,
         ])
+        updateKeyboardHeight()
         showCandidateMessage("ローマ字を入力して変換")
+    }
+
+    private func updateKeyboardHeight() {
+        let isLandscape = (view.window?.windowScene?.interfaceOrientation.isLandscape)
+            ?? (traitCollection.verticalSizeClass == .compact)
+        keyboardHeightConstraint?.constant = isLandscape ? 216 : 352
+        candidateBarHeightConstraint?.constant = isLandscape ? 32 : 40
+        keyboardStackTopConstraint?.constant = isLandscape ? 4 : 8
+        keyboardStackBottomConstraint?.constant = isLandscape ? -4 : -8
+        keyboardStack?.spacing = isLandscape ? 4 : 8
+        keyRowsStack?.spacing = isLandscape ? 4 : 8
     }
 
     private func makeCandidateBar() -> UIView {
@@ -124,6 +164,10 @@ final class KeyboardViewController: UIInputViewController {
     private func makeLetterRow(_ letters: [String]) -> UIStackView {
         let buttons = letters.map(makeLetterButton)
         return makeRow(buttons)
+    }
+
+    private func makeNumberRow() -> UIStackView {
+        makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map(makeNumberButton))
     }
 
     private func makeThirdRow() -> UIStackView {
@@ -211,6 +255,16 @@ final class KeyboardViewController: UIInputViewController {
         )
         button.accessibilityIdentifier = symbol
         button.addTarget(self, action: #selector(symbolTapped), for: .touchUpInside)
+        return button
+    }
+
+    private func makeNumberButton(_ number: String) -> UIButton {
+        let button = makeKeyButton(
+            title: number,
+            accessibilityLabel: "数字 \(number)"
+        )
+        button.accessibilityIdentifier = number
+        button.addTarget(self, action: #selector(numberTapped), for: .touchUpInside)
         return button
     }
 
@@ -559,6 +613,13 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
         insertTrackedText(symbol)
+    }
+
+    @objc private func numberTapped(_ sender: UIButton) {
+        guard let number = sender.accessibilityIdentifier else {
+            return
+        }
+        insertTrackedText(number)
     }
 
     @objc private func shiftTapped() {
