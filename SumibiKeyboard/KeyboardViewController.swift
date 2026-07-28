@@ -142,7 +142,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeSymbolRow() -> UIStackView {
-        makeRow([",", ".", "/", "?"].map(makeSymbolButton))
+        makeRow([",", ".", "/", "?", "!", "-"].map(makeSymbolButton))
     }
 
     private func makeBottomRow() -> UIStackView {
@@ -207,11 +207,22 @@ final class KeyboardViewController: UIInputViewController {
     private func makeSymbolButton(_ symbol: String) -> UIButton {
         let button = makeKeyButton(
             title: symbol,
-            accessibilityLabel: "記号 \(symbol)"
+            accessibilityLabel: symbolAccessibilityLabel(symbol)
         )
         button.accessibilityIdentifier = symbol
         button.addTarget(self, action: #selector(symbolTapped), for: .touchUpInside)
         return button
+    }
+
+    private func symbolAccessibilityLabel(_ symbol: String) -> String {
+        switch symbol {
+        case "!":
+            "感嘆符"
+        case "-":
+            "ハイフン"
+        default:
+            "記号 \(symbol)"
+        }
     }
 
     private func makeSpecialButton(
