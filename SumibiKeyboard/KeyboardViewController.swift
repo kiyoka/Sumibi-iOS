@@ -31,6 +31,10 @@ final class KeyboardViewController: UIInputViewController {
     private var keyboardStackTopConstraint: NSLayoutConstraint?
     private var keyboardStackBottomConstraint: NSLayoutConstraint?
     private var keyboardHeightConstraint: NSLayoutConstraint?
+    private var symbolPanelHeightConstraint: NSLayoutConstraint?
+    private var symbolPanel: UIStackView?
+    private var symbolToggleButton: UIButton?
+    private var isSymbolPanelExpanded = false
     private var isShifted = false
 
     override func viewDidLoad() {
@@ -41,6 +45,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        setSymbolPanelExpanded(false, animated: false)
         conversionTask?.cancel()
         conversionTask = nil
         activeRequestID = nil
@@ -74,7 +79,10 @@ final class KeyboardViewController: UIInputViewController {
         keyRowsStack = keyRows
 
         let candidateBar = makeCandidateBar()
-        let keyboardStack = UIStackView(arrangedSubviews: [candidateBar, keyRows])
+        let symbolPanel = makeExpandedSymbolPanel()
+        symbolPanel.isHidden = true
+        self.symbolPanel = symbolPanel
+        let keyboardStack = UIStackView(arrangedSubviews: [candidateBar, symbolPanel, keyRows])
         keyboardStack.axis = .vertical
         keyboardStack.spacing = 8
         keyboardStack.distribution = .fill
@@ -92,10 +100,13 @@ final class KeyboardViewController: UIInputViewController {
             constant: -8
         )
         let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: 352)
+        let symbolPanelHeightConstraint = symbolPanel.heightAnchor.constraint(equalToConstant: 112)
+        symbolPanelHeightConstraint.isActive = false
         self.candidateBarHeightConstraint = candidateBarHeightConstraint
         self.keyboardStackTopConstraint = keyboardStackTopConstraint
         self.keyboardStackBottomConstraint = keyboardStackBottomConstraint
         self.keyboardHeightConstraint = keyboardHeightConstraint
+        self.symbolPanelHeightConstraint = symbolPanelHeightConstraint
         NSLayoutConstraint.activate([
             candidateBarHeightConstraint,
             keyboardStackTopConstraint,
@@ -111,12 +122,17 @@ final class KeyboardViewController: UIInputViewController {
     private func updateKeyboardHeight() {
         let isLandscape = (view.window?.windowScene?.interfaceOrientation.isLandscape)
             ?? (traitCollection.verticalSizeClass == .compact)
-        keyboardHeightConstraint?.constant = isLandscape ? 216 : 352
+        let normalHeight: CGFloat = isLandscape ? 216 : 352
+        let expandedExtraHeight: CGFloat = isLandscape ? 92 : 120
+        keyboardHeightConstraint?.constant = normalHeight
+            + (isSymbolPanelExpanded ? expandedExtraHeight : 0)
+        symbolPanelHeightConstraint?.constant = isLandscape ? 84 : 112
         candidateBarHeightConstraint?.constant = isLandscape ? 32 : 40
         keyboardStackTopConstraint?.constant = isLandscape ? 4 : 8
         keyboardStackBottomConstraint?.constant = isLandscape ? -4 : -8
         keyboardStack?.spacing = isLandscape ? 4 : 8
         keyRowsStack?.spacing = isLandscape ? 4 : 8
+        symbolPanel?.spacing = isLandscape ? 4 : 6
     }
 
     private func makeCandidateBar() -> UIView {
@@ -140,8 +156,23 @@ final class KeyboardViewController: UIInputViewController {
         candidateStack.alignment = .center
         candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
+        let handleButton = UIButton(type: .system)
+        handleButton.setTitle("━", for: .normal)
+        handleButton.setTitleColor(.secondaryLabel, for: .normal)
+        handleButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        handleButton.accessibilityLabel = "記号一覧ハンドル"
+        handleButton.accessibilityHint = "上へスワイプして開き、下へスワイプして閉じます"
+        handleButton.addTarget(self, action: #selector(symbolHandleTapped), for: .touchUpInside)
+        let panGesture = UIPanGestureRecognizer(
+            target: self,
+            action: #selector(symbolHandlePanned)
+        )
+        handleButton.addGestureRecognizer(panGesture)
+        handleButton.translatesAutoresizingMaskIntoConstraints = false
+
         container.addSubview(iconView)
         container.addSubview(scrollView)
+        container.addSubview(handleButton)
         scrollView.addSubview(candidateStack)
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 6),
@@ -157,8 +188,28 @@ final class KeyboardViewController: UIInputViewController {
             candidateStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             candidateStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             candidateStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
+            handleButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            handleButton.topAnchor.constraint(equalTo: container.topAnchor, constant: -2),
+            handleButton.widthAnchor.constraint(equalToConstant: 44),
+            handleButton.heightAnchor.constraint(equalToConstant: 16),
         ])
         return container
+    }
+
+    private func makeExpandedSymbolPanel() -> UIStackView {
+        let rows = [
+            ["@", "#", "$", "%", "&", "*", "(", ")"],
+            ["_", "+", "=", "[", "]", "{", "}", "\\"],
+            ["|", ":", ";", "\"", "'", "<", ">"],
+        ].map { symbols in
+            makeRow(symbols.map(makeSymbolButton))
+        }
+        let panel = UIStackView(arrangedSubviews: rows)
+        panel.axis = .vertical
+        panel.spacing = 6
+        panel.distribution = .fillEqually
+        panel.accessibilityIdentifier = "expanded-symbol-panel"
+        return panel
     }
 
     private func makeLetterRow(_ letters: [String]) -> UIStackView {
@@ -209,15 +260,24 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeBottomRow() -> UIStackView {
-        let nextKeyboardButton = makeKeyButton(
-            title: "🌐",
-            accessibilityLabel: "次のキーボード"
+        let symbolButton = makeSpecialButton(
+            title: "記号",
+            accessibilityLabel: "記号一覧",
+            action: #selector(symbolToggleTapped)
         )
-        nextKeyboardButton.addTarget(
-            self,
-            action: #selector(handleInputModeList(from:with:)),
-            for: .allTouchEvents
-        )
+        symbolButton.accessibilityIdentifier = "symbol-toggle"
+        symbolButton.accessibilityValue = "非表示"
+        if needsInputModeSwitchKey {
+            symbolButton.accessibilityHint = "長押しで次のキーボードへ切り替えます"
+            let longPressGesture = UILongPressGestureRecognizer(
+                target: self,
+                action: #selector(symbolButtonLongPressed)
+            )
+            symbolButton.addGestureRecognizer(longPressGesture)
+        } else {
+            symbolButton.accessibilityHint = "タップで記号一覧を開きます"
+        }
+        symbolToggleButton = symbolButton
 
         let spaceButton = makeSpecialButton(
             title: "空白",
@@ -237,14 +297,14 @@ final class KeyboardViewController: UIInputViewController {
         self.convertButton = convertButton
         refreshConvertButton()
 
-        let row = makeRow([nextKeyboardButton, spaceButton, convertButton, returnButton])
+        let row = makeRow([symbolButton, spaceButton, convertButton, returnButton])
         row.distribution = .fill
         spaceButton.widthAnchor.constraint(
-            equalTo: nextKeyboardButton.widthAnchor,
+            equalTo: symbolButton.widthAnchor,
             multiplier: 3
         ).isActive = true
-        convertButton.widthAnchor.constraint(equalTo: nextKeyboardButton.widthAnchor).isActive = true
-        returnButton.widthAnchor.constraint(equalTo: nextKeyboardButton.widthAnchor).isActive = true
+        convertButton.widthAnchor.constraint(equalTo: symbolButton.widthAnchor).isActive = true
+        returnButton.widthAnchor.constraint(equalTo: symbolButton.widthAnchor).isActive = true
         return row
     }
 
@@ -613,6 +673,75 @@ final class KeyboardViewController: UIInputViewController {
                 apiKey: apiKey
             )
         )
+    }
+
+    private func setSymbolPanelExpanded(_ expanded: Bool, animated: Bool) {
+        guard expanded != isSymbolPanelExpanded, let symbolPanel else {
+            return
+        }
+
+        isSymbolPanelExpanded = expanded
+        if expanded {
+            symbolPanel.isHidden = false
+            symbolPanelHeightConstraint?.isActive = true
+        } else {
+            symbolPanelHeightConstraint?.isActive = false
+            symbolPanel.isHidden = true
+        }
+        symbolToggleButton?.configuration?.title = expanded ? "戻る" : "記号"
+        symbolToggleButton?.accessibilityLabel = expanded
+            ? "通常キーボードに戻る"
+            : "記号一覧"
+        symbolToggleButton?.accessibilityValue = expanded ? "表示中" : "非表示"
+        symbolToggleButton?.accessibilityHint = needsInputModeSwitchKey
+            ? "タップで\(expanded ? "閉じます" : "開きます")。長押しで次のキーボードへ切り替えます"
+            : "タップで\(expanded ? "閉じます" : "開きます")"
+        updateKeyboardHeight()
+
+        let updates = {
+            self.view.layoutIfNeeded()
+        }
+        if animated {
+            UIView.animate(
+                withDuration: 0.2,
+                delay: 0,
+                options: [.beginFromCurrentState, .curveEaseInOut],
+                animations: updates
+            )
+        } else {
+            updates()
+        }
+        UIAccessibility.post(
+            notification: .layoutChanged,
+            argument: expanded ? symbolPanel : symbolToggleButton
+        )
+    }
+
+    @objc private func symbolToggleTapped() {
+        setSymbolPanelExpanded(!isSymbolPanelExpanded, animated: true)
+    }
+
+    @objc private func symbolHandleTapped() {
+        symbolToggleTapped()
+    }
+
+    @objc private func symbolHandlePanned(_ gesture: UIPanGestureRecognizer) {
+        guard gesture.state == .ended else {
+            return
+        }
+        let verticalMovement = gesture.translation(in: gesture.view).y
+        if verticalMovement <= -20 {
+            setSymbolPanelExpanded(true, animated: true)
+        } else if verticalMovement >= 20 {
+            setSymbolPanelExpanded(false, animated: true)
+        }
+    }
+
+    @objc private func symbolButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, needsInputModeSwitchKey else {
+            return
+        }
+        advanceToNextInputMode()
     }
 
     @objc private func letterTapped(_ sender: UIButton) {
