@@ -187,7 +187,21 @@ final class KeyboardViewController: UIInputViewController {
             action: #selector(deleteTapped)
         )
         let letters = ["z", "x", "c", "v", "b", "n", "m"].map(makeLetterButton)
-        return makeRow([shiftButton] + letters + [deleteButton])
+        let row = makeRow([shiftButton] + letters + [deleteButton])
+        row.distribution = .fill
+
+        guard let referenceLetter = letters.first else {
+            return row
+        }
+        shiftButton.widthAnchor.constraint(equalTo: referenceLetter.widthAnchor).isActive = true
+        for letterButton in letters.dropFirst() {
+            letterButton.widthAnchor.constraint(equalTo: referenceLetter.widthAnchor).isActive = true
+        }
+        deleteButton.widthAnchor.constraint(
+            equalTo: referenceLetter.widthAnchor,
+            multiplier: 2
+        ).isActive = true
+        return row
     }
 
     private func makeSymbolRow() -> UIStackView {
