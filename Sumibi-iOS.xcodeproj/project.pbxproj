@@ -21,7 +21,7 @@
 		A1000000000000000000000C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* PrivacyInfo.xcprivacy */; };
 		A1000000000000000000000D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* PrivacyInfo.xcprivacy */; };
 		A1000000000000000000000E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Assets.xcassets */; };
-		A1000000000000000000000F /* AppIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* AppIcon.png */; };
+		A1000000000000000000000F /* KeyboardIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* KeyboardIcon.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,7 +79,7 @@
 		A2000000000000000000000E /* OpenAICompatibleClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleClient.swift; sourceTree = "<group>"; };
 		A2000000000000000000000F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A20000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A20000000000000000000011 /* AppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = AppIcon.png; path = SumibiApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png; sourceTree = SOURCE_ROOT; };
+		A20000000000000000000011 /* KeyboardIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = KeyboardIcon.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -133,7 +133,7 @@
 		A80000000000000000000003 /* SumibiKeyboard */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000011 /* AppIcon.png */,
+				A20000000000000000000011 /* KeyboardIcon.png */,
 				A20000000000000000000002 /* KeyboardViewController.swift */,
 				A20000000000000000000004 /* Info.plist */,
 				A2000000000000000000000A /* SumibiKeyboard.entitlements */,
@@ -277,7 +277,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000000000000000000000F /* AppIcon.png in Resources */,
+				A1000000000000000000000F /* KeyboardIcon.png in Resources */,
 				A1000000000000000000000D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
