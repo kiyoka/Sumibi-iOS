@@ -2,6 +2,14 @@ import SumibiCore
 import UIKit
 
 final class KeyboardViewController: UIInputViewController {
+    private enum RepeatableKeyKind {
+        case letter
+        case symbol
+        case number
+        case delete
+        case space
+    }
+
     private struct CandidateSession {
         let original: String
         let undoOriginal: String
@@ -35,6 +43,9 @@ final class KeyboardViewController: UIInputViewController {
     private var symbolPanelHeightConstraint: NSLayoutConstraint?
     private var symbolPanel: UIStackView?
     private var symbolToggleButton: UIButton?
+    private var repeatableKeyKinds: [ObjectIdentifier: RepeatableKeyKind] = [:]
+    private var keyRepeatTimer: Timer?
+    private weak var repeatingButton: UIButton?
     private var isSymbolPanelExpanded = false
     private var isShifted = false
 
@@ -46,6 +57,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        stopKeyRepeat()
         setSymbolPanelExpanded(false, animated: false)
         conversionTask?.cancel()
         conversionTask = nil
@@ -264,6 +276,7 @@ final class KeyboardViewController: UIInputViewController {
             accessibilityLabel: "削除",
             action: #selector(deleteTapped)
         )
+        registerKeyRepeat(for: deleteButton, kind: .delete)
         let letters = ["z", "x", "c", "v", "b", "n", "m"].map(makeLetterButton)
         let row = makeRow([shiftButton] + letters + [deleteButton])
         row.distribution = .fill
@@ -311,6 +324,7 @@ final class KeyboardViewController: UIInputViewController {
             accessibilityLabel: "空白",
             action: #selector(spaceTapped)
         )
+        registerKeyRepeat(for: spaceButton, kind: .space)
         let convertButton = makeSpecialButton(
             title: "変換",
             accessibilityLabel: "変換",
@@ -350,6 +364,7 @@ final class KeyboardViewController: UIInputViewController {
         )
         button.accessibilityIdentifier = letter
         button.addTarget(self, action: #selector(letterTapped), for: .touchUpInside)
+        registerKeyRepeat(for: button, kind: .letter)
         letterButtons.append(button)
         return button
     }
@@ -361,6 +376,7 @@ final class KeyboardViewController: UIInputViewController {
         )
         button.accessibilityIdentifier = symbol
         button.addTarget(self, action: #selector(symbolTapped), for: .touchUpInside)
+        registerKeyRepeat(for: button, kind: .symbol)
         return button
     }
 
@@ -371,7 +387,83 @@ final class KeyboardViewController: UIInputViewController {
         )
         button.accessibilityIdentifier = number
         button.addTarget(self, action: #selector(numberTapped), for: .touchUpInside)
+        registerKeyRepeat(for: button, kind: .number)
         return button
+    }
+
+    private func registerKeyRepeat(for button: UIButton, kind: RepeatableKeyKind) {
+        repeatableKeyKinds[ObjectIdentifier(button)] = kind
+        let gesture = UILongPressGestureRecognizer(
+            target: self,
+            action: #selector(repeatableKeyLongPressed)
+        )
+        gesture.minimumPressDuration = 0.85
+        gesture.allowableMovement = 20
+        button.addGestureRecognizer(gesture)
+    }
+
+    private func performRepeatAction(for button: UIButton) {
+        guard let kind = repeatableKeyKinds[ObjectIdentifier(button)] else {
+            stopKeyRepeat()
+            return
+        }
+        switch kind {
+        case .letter:
+            letterTapped(button)
+        case .symbol:
+            symbolTapped(button)
+        case .number:
+            numberTapped(button)
+        case .delete:
+            deleteTapped()
+        case .space:
+            spaceTapped()
+        }
+    }
+
+    private func startKeyRepeat(for button: UIButton) {
+        stopKeyRepeat()
+        repeatingButton = button
+        performRepeatAction(for: button)
+
+        let timer = Timer(
+            timeInterval: 0.085,
+            target: self,
+            selector: #selector(keyRepeatTimerFired),
+            userInfo: nil,
+            repeats: true
+        )
+        keyRepeatTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopKeyRepeat() {
+        keyRepeatTimer?.invalidate()
+        keyRepeatTimer = nil
+        repeatingButton = nil
+    }
+
+    @objc private func keyRepeatTimerFired() {
+        guard let repeatingButton else {
+            stopKeyRepeat()
+            return
+        }
+        performRepeatAction(for: repeatingButton)
+    }
+
+    @objc private func repeatableKeyLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard let button = gesture.view as? UIButton else {
+            stopKeyRepeat()
+            return
+        }
+        switch gesture.state {
+        case .began:
+            startKeyRepeat(for: button)
+        case .ended, .cancelled, .failed:
+            stopKeyRepeat()
+        default:
+            break
+        }
     }
 
     private func symbolAccessibilityLabel(_ symbol: String) -> String {
