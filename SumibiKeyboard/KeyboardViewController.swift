@@ -31,6 +31,7 @@ final class KeyboardViewController: UIInputViewController {
     private var keyboardStackTopConstraint: NSLayoutConstraint?
     private var keyboardStackBottomConstraint: NSLayoutConstraint?
     private var keyboardHeightConstraint: NSLayoutConstraint?
+    private var numberDividerCenterYConstraint: NSLayoutConstraint?
     private var symbolPanelHeightConstraint: NSLayoutConstraint?
     private var symbolPanel: UIStackView?
     private var symbolToggleButton: UIButton?
@@ -65,8 +66,9 @@ final class KeyboardViewController: UIInputViewController {
     private func configureKeyboard() {
         view.backgroundColor = .systemGray5
 
+        let numberRow = makeNumberRow()
         let keyRows = UIStackView(arrangedSubviews: [
-            makeNumberRow(),
+            numberRow,
             makeLetterRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
             makeSecondRow(),
             makeThirdRow(),
@@ -77,6 +79,7 @@ final class KeyboardViewController: UIInputViewController {
         keyRows.spacing = 8
         keyRows.distribution = .fillEqually
         keyRowsStack = keyRows
+        addNumberDivider(to: keyRows, below: numberRow)
 
         let candidateBar = makeCandidateBar()
         let symbolPanel = makeExpandedSymbolPanel()
@@ -132,7 +135,31 @@ final class KeyboardViewController: UIInputViewController {
         keyboardStackBottomConstraint?.constant = isLandscape ? -4 : -8
         keyboardStack?.spacing = isLandscape ? 4 : 8
         keyRowsStack?.spacing = isLandscape ? 4 : 8
+        numberDividerCenterYConstraint?.constant = isLandscape ? 2 : 4
         symbolPanel?.spacing = isLandscape ? 4 : 6
+    }
+
+    private func addNumberDivider(to keyRows: UIStackView, below numberRow: UIView) {
+        let divider = UIView()
+        divider.backgroundColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark ? .systemGray2 : .systemGray
+        }
+        divider.isUserInteractionEnabled = false
+        divider.isAccessibilityElement = false
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        keyRows.addSubview(divider)
+
+        let centerYConstraint = divider.centerYAnchor.constraint(
+            equalTo: numberRow.bottomAnchor,
+            constant: 4
+        )
+        numberDividerCenterYConstraint = centerYConstraint
+        NSLayoutConstraint.activate([
+            divider.leadingAnchor.constraint(equalTo: keyRows.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: keyRows.trailingAnchor),
+            divider.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+            centerYConstraint,
+        ])
     }
 
     private func makeCandidateBar() -> UIView {
