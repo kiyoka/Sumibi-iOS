@@ -20,12 +20,14 @@ private struct ContentView: View {
     @State private var testSource = "sumibi yakiniku ga sukidesu ."
     @State private var testResult = ""
     @State private var isTesting = false
+    @State private var hapticFeedbackEnabled = true
 
     var body: some View {
         NavigationStack {
             Form {
                 introductionSection
                 providerSection
+                keyboardBehaviorSection
                 conversionTestSection
                 keyboardSetupSection
                 privacySection
@@ -121,6 +123,19 @@ private struct ContentView: View {
         }
     }
 
+    private var keyboardBehaviorSection: some View {
+        Section {
+            Toggle("キー入力の触覚フィードバック", isOn: $hapticFeedbackEnabled)
+                .onChange(of: hapticFeedbackEnabled) { _, isEnabled in
+                    SharedSettingsStore()?.saveHapticFeedbackEnabled(isEnabled)
+                }
+        } header: {
+            Text("キーボード設定")
+        } footer: {
+            Text("初期設定はONです。キーを押したときに軽い触覚を返します。")
+        }
+    }
+
     private var keyboardSetupSection: some View {
         Section {
             setupStep(number: 1, text: "「設定を開く」を押します。")
@@ -166,9 +181,11 @@ private struct ContentView: View {
     }
 
     private func loadSettings() {
-        if let configuration = SharedSettingsStore()?.loadProviderConfiguration() {
+        if let store = SharedSettingsStore() {
+            let configuration = store.loadProviderConfiguration()
             endpoint = configuration.endpoint
             model = configuration.model
+            hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
         }
         do {
             hasStoredAPIKey = try APIKeyStore().load() != nil

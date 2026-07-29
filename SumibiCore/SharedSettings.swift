@@ -21,6 +21,7 @@ public struct SharedSettingsStore {
 
     private enum Key {
         static let providerConfiguration = "providerConfiguration"
+        static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
     }
 
     private let defaults: UserDefaults
@@ -66,5 +67,16 @@ public struct SharedSettingsStore {
 
     public func resetProviderConfiguration() {
         defaults.removeObject(forKey: Key.providerConfiguration)
+    }
+
+    public func loadHapticFeedbackEnabled() -> Bool {
+        guard defaults.object(forKey: Key.hapticFeedbackEnabled) != nil else {
+            return true
+        }
+        return defaults.bool(forKey: Key.hapticFeedbackEnabled)
+    }
+
+    public func saveHapticFeedbackEnabled(_ isEnabled: Bool) {
+        defaults.set(isEnabled, forKey: Key.hapticFeedbackEnabled)
     }
 }
