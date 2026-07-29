@@ -23,6 +23,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private lazy var sharedSettings = SharedSettingsStore()
+    private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
     private let candidateStack = UIStackView()
     private var letterButtons: [UIButton] = []
     private var compositionTracker = CompositionTracker()
@@ -504,7 +505,16 @@ final class KeyboardViewController: UIInputViewController {
         let button = UIButton(configuration: configuration)
         button.titleLabel?.font = .systemFont(ofSize: 20)
         button.accessibilityLabel = accessibilityLabel
+        button.addTarget(self, action: #selector(keyTouchDown), for: .touchDown)
         return button
+    }
+
+    @objc private func keyTouchDown() {
+        guard sharedSettings?.loadHapticFeedbackEnabled() ?? true else {
+            return
+        }
+        hapticFeedbackGenerator.prepare()
+        hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
     }
 
     private func displayedLetter(_ letter: String) -> String {
