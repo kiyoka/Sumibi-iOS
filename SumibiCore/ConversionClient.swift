@@ -18,6 +18,20 @@ public struct ConversionResponse: Equatable, Sendable {
     }
 }
 
+public enum ConversionCandidatePolicy {
+    public static let longInputThreshold = 10
+
+    public static func romanLetterCount(in source: String) -> Int {
+        source.unicodeScalars.lazy.filter { scalar in
+            (65 ... 90).contains(scalar.value) || (97 ... 122).contains(scalar.value)
+        }.count
+    }
+
+    public static func candidateCount(for source: String) -> Int {
+        romanLetterCount(in: source) > longInputThreshold ? 5 : 3
+    }
+}
+
 public protocol ConversionClient: Sendable {
     func convert(_ request: ConversionRequest) async throws -> ConversionResponse
 }

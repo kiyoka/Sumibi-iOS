@@ -674,6 +674,7 @@ final class KeyboardViewController: UIInputViewController {
         activeRequestID = nil
         conversionTask = nil
 
+        let candidateLimit = ConversionCandidatePolicy.candidateCount(for: snapshot.source)
         let candidates = Array(
             response.candidates
                 .filter { !$0.isEmpty }
@@ -682,7 +683,7 @@ final class KeyboardViewController: UIInputViewController {
                         unique.append(candidate)
                     }
                 }
-                .prefix(3)
+                .prefix(candidateLimit)
         )
         guard let firstCandidate = candidates.first else {
             pendingConversion = nil
