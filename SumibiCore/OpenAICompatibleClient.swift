@@ -77,7 +77,7 @@ public struct OpenAICompatibleClient: ConversionClient {
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
             urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
-        let candidateCount = ConversionCandidatePolicy.candidateCount(for: request.source)
+        let candidateCount = request.mode.candidateCount
         urlRequest.httpBody = try encoder.encode(
             ChatRequest(
                 model: configuration.model,
@@ -88,7 +88,7 @@ public struct OpenAICompatibleClient: ConversionClient {
                         あなたはローマ字と英語を自然な日本語へ変換するIMEです。
                         Markdown記法、URL、固有名詞は可能な限り維持してください。
                         入力にない情報は追加しないでください。
-                        \(candidateInstructions(count: candidateCount))
+                        \(candidateInstructions(for: request))
                         JSON以外の説明やMarkdownのコードフェンスは返さないでください。
                         """
                     ),
@@ -97,6 +97,9 @@ public struct OpenAICompatibleClient: ConversionClient {
                         content: """
                         周辺文脈：
                         \(request.surroundingContext)
+
+                        現在の変換結果：
+                        \(request.currentConversion ?? "なし")
 
                         変換対象：
                         \(request.source)
@@ -129,22 +132,21 @@ public struct OpenAICompatibleClient: ConversionClient {
         return ConversionResponse(candidates: Array(candidates))
     }
 
-    private func candidateInstructions(count: Int) -> String {
-        if count == 5 {
+    private func candidateInstructions(for request: ConversionRequest) -> String {
+        if request.mode == .additional {
             return """
-            次の順序で異なる5候補を作り、{"candidates":["候補1","候補2","候補3","候補4","候補5"]}というJSONだけを返してください。
-            1. 文脈に最も自然な、通常の漢字変換を含む候補
-            2. 全文をひらがなにした候補（句読点は維持）
-            3. 全文をカタカナにした候補（句読点は維持）
-            4. 候補1よりひらがなを少なくし、漢字を多くした候補
-            5. 候補1よりひらがなを多くし、漢字を少なくした候補
+            内容と表記が重複しない7候補を必ず作り、{"candidates":["候補1","候補2","候補3","候補4","候補5","候補6","候補7"]}というJSONだけを返してください。
+            1. 「現在の変換結果」をそのまま使用した候補
+            2. QWERTYキーボードから入力されたものとみなし、入力意図を最大限推測してタイプミスを修正した自然な日本語の文章。隣接キーの押し間違い、文字の抜け・重複・順序違いを文脈から補正する
+            3. 全文をひらがなにした候補（句読点は維持）
+            4. 全文をカタカナにした候補（句読点は維持）
+            5. 可能な限り漢字を多く使った候補
+            6. 可能な限り送り仮名をひらいた候補
+            7. 自然な英語へ翻訳した候補
             """
         }
         return """
-        次の順序で異なる3候補を作り、{"candidates":["候補1","候補2","候補3"]}というJSONだけを返してください。
-        1. 文脈に最も自然な、通常の漢字変換を含む候補
-        2. 全文をひらがなにした候補（句読点は維持）
-        3. 全文をカタカナにした候補（句読点は維持）
+        文脈に最も自然な日本語変換を1件だけ作り、{"candidates":["候補1"]}というJSONだけを返してください。
         """
     }
 

@@ -13,8 +13,10 @@ final class KeyboardViewController: UIInputViewController {
     private struct CandidateSession {
         let original: String
         let undoOriginal: String
-        let options: [String]
+        let surroundingContext: String
+        var options: [String]
         var current: String
+        var hasRequestedAdditionalCandidates: Bool
     }
 
     private struct UndoRecord {
@@ -31,6 +33,7 @@ final class KeyboardViewController: UIInputViewController {
     private var candidateSession: CandidateSession?
     private var undoRecord: UndoRecord?
     private var retrySnapshot: ConversionSnapshot?
+    private var additionalCandidateErrorMessage: String?
     private var conversionTask: Task<Void, Never>?
     private var activeRequestID: UUID?
     private var convertButton: UIButton?
@@ -68,6 +71,7 @@ final class KeyboardViewController: UIInputViewController {
         candidateSession = nil
         undoRecord = nil
         retrySnapshot = nil
+        additionalCandidateErrorMessage = nil
         refreshConvertButton()
     }
 
@@ -609,6 +613,20 @@ final class KeyboardViewController: UIInputViewController {
                 action: #selector(undoTapped)
             )
         }
+        if let additionalCandidateErrorMessage {
+            let label = UILabel()
+            label.text = additionalCandidateErrorMessage
+            label.textColor = .secondaryLabel
+            label.font = .systemFont(ofSize: 13)
+            candidateStack.addArrangedSubview(label)
+        }
+        if !session.hasRequestedAdditionalCandidates {
+            addCandidateAction(
+                title: "さらに変換候補を取得",
+                accessibilityLabel: "さらに変換候補を取得",
+                action: #selector(additionalCandidatesTapped)
+            )
+        }
         for (index, option) in session.options.enumerated() {
             var configuration = UIButton.Configuration.gray()
             configuration.title = option == session.original ? "原文" : option
@@ -634,6 +652,7 @@ final class KeyboardViewController: UIInputViewController {
         candidateSession = nil
         undoRecord = nil
         retrySnapshot = nil
+        additionalCandidateErrorMessage = nil
         showCandidateMessage("入力中")
     }
 
@@ -672,6 +691,7 @@ final class KeyboardViewController: UIInputViewController {
     private func finishConversion(
         _ response: ConversionResponse,
         snapshot: ConversionSnapshot,
+        surroundingContext: String,
         requestID: UUID
     ) {
         guard activeRequestID == requestID else {
@@ -680,7 +700,6 @@ final class KeyboardViewController: UIInputViewController {
         activeRequestID = nil
         conversionTask = nil
 
-        let candidateLimit = ConversionCandidatePolicy.candidateCount(for: snapshot.source)
         let candidates = Array(
             response.candidates
                 .filter { !$0.isEmpty }
@@ -689,7 +708,7 @@ final class KeyboardViewController: UIInputViewController {
                         unique.append(candidate)
                     }
                 }
-                .prefix(candidateLimit)
+                .prefix(ConversionCandidateMode.primary.candidateCount)
         )
         guard let firstCandidate = candidates.first else {
             pendingConversion = nil
@@ -719,13 +738,16 @@ final class KeyboardViewController: UIInputViewController {
         candidateSession = CandidateSession(
             original: snapshot.source,
             undoOriginal: snapshot.textToReplace,
+            surroundingContext: surroundingContext,
             options: options,
-            current: firstCandidate
+            current: firstCandidate,
+            hasRequestedAdditionalCandidates: false
         )
         undoRecord = firstCandidate == snapshot.textToReplace
             ? nil
             : UndoRecord(original: snapshot.textToReplace, replacement: firstCandidate)
         retrySnapshot = nil
+        additionalCandidateErrorMessage = nil
         pendingConversion = nil
         compositionTracker.reset()
         showCandidates()
@@ -947,6 +969,7 @@ final class KeyboardViewController: UIInputViewController {
     private func startConversion(_ snapshot: ConversionSnapshot) {
         pendingConversion = snapshot
         retrySnapshot = nil
+        additionalCandidateErrorMessage = nil
         undoRecord = nil
         guard let conversionClient = makeConversionClient() else {
             pendingConversion = nil
@@ -972,13 +995,135 @@ final class KeyboardViewController: UIInputViewController {
                 guard let self else {
                     return
                 }
-                self.finishConversion(response, snapshot: snapshot, requestID: requestID)
+                self.finishConversion(
+                    response,
+                    snapshot: snapshot,
+                    surroundingContext: surroundingContext,
+                    requestID: requestID
+                )
             } catch is CancellationError {
                 return
             } catch {
                 self?.failConversion(error, snapshot: snapshot, requestID: requestID)
             }
         }
+    }
+
+    @objc private func additionalCandidatesTapped() {
+        guard
+            activeRequestID == nil,
+            var session = candidateSession,
+            !session.hasRequestedAdditionalCandidates
+        else {
+            return
+        }
+
+        let expectedSuffix = String(session.current.suffix(32))
+        guard
+            !expectedSuffix.isEmpty,
+            textDocumentProxy.documentContextBeforeInput?.hasSuffix(expectedSuffix) == true
+        else {
+            candidateSession = nil
+            undoRecord = nil
+            showCandidateMessage("入力内容が変更されたため追加候補を取得できません")
+            return
+        }
+        guard let conversionClient = makeConversionClient() else {
+            return
+        }
+
+        session.hasRequestedAdditionalCandidates = true
+        candidateSession = session
+        additionalCandidateErrorMessage = nil
+        let requestID = UUID()
+        activeRequestID = requestID
+        showCandidateMessage("追加候補を取得中…", showsProgress: true)
+        refreshConvertButton()
+
+        let request = ConversionRequest(
+            source: session.original,
+            surroundingContext: session.surroundingContext,
+            mode: .additional,
+            currentConversion: session.current
+        )
+        conversionTask = Task { [weak self, conversionClient] in
+            do {
+                let response = try await conversionClient.convert(request)
+                self?.finishAdditionalCandidates(response, requestID: requestID)
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.failAdditionalCandidates(error, requestID: requestID)
+            }
+        }
+    }
+
+    private func finishAdditionalCandidates(
+        _ response: ConversionResponse,
+        requestID: UUID
+    ) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        activeRequestID = nil
+        conversionTask = nil
+
+        guard var session = candidateSession else {
+            refreshConvertButton()
+            return
+        }
+        let expectedSuffix = String(session.current.suffix(32))
+        guard
+            !expectedSuffix.isEmpty,
+            textDocumentProxy.documentContextBeforeInput?.hasSuffix(expectedSuffix) == true
+        else {
+            candidateSession = nil
+            undoRecord = nil
+            showCandidateMessage("入力内容が変更されたため追加候補を表示しません")
+            refreshConvertButton()
+            return
+        }
+
+        let responseCandidates = response.candidates
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var options = session.options.filter { $0 != session.original }
+        if !options.contains(session.current) {
+            options.insert(session.current, at: 0)
+        }
+        for candidate in responseCandidates where !options.contains(candidate) {
+            guard options.count < ConversionCandidateMode.additional.candidateCount else {
+                break
+            }
+            options.append(candidate)
+        }
+        guard options.count > 1 else {
+            additionalCandidateErrorMessage = "追加候補を取得できませんでした"
+            showCandidates()
+            refreshConvertButton()
+            return
+        }
+
+        if !options.contains(session.original) {
+            options.append(session.original)
+        }
+        session.options = options
+        candidateSession = session
+        additionalCandidateErrorMessage = nil
+        showCandidates()
+        refreshConvertButton()
+    }
+
+    private func failAdditionalCandidates(_ error: Error, requestID: UUID) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        activeRequestID = nil
+        conversionTask = nil
+        let presentation = errorPresentation(for: error)
+        additionalCandidateErrorMessage = presentation.message
+        showCandidates()
+        refreshConvertButton()
     }
 
     @objc private func cancelTapped() {
