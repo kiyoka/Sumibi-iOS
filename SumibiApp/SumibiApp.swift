@@ -21,6 +21,7 @@ private struct ContentView: View {
     @State private var testResult = ""
     @State private var isTesting = false
     @State private var hapticFeedbackEnabled = true
+    @State private var keyClickSoundEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -129,10 +130,14 @@ private struct ContentView: View {
                 .onChange(of: hapticFeedbackEnabled) { _, isEnabled in
                     SharedSettingsStore()?.saveHapticFeedbackEnabled(isEnabled)
                 }
+            Toggle("キークリック音", isOn: $keyClickSoundEnabled)
+                .onChange(of: keyClickSoundEnabled) { _, isEnabled in
+                    SharedSettingsStore()?.saveKeyClickSoundEnabled(isEnabled)
+                }
         } header: {
             Text("キーボード設定")
         } footer: {
-            Text("初期設定はONです。キーを押したときに軽い触覚を返します。")
+            Text("どちらも初期設定はONです。クリック音はiOS本体の消音・音量・キーボードの設定に従います。")
         }
     }
 
@@ -186,6 +191,7 @@ private struct ContentView: View {
             endpoint = configuration.endpoint
             model = configuration.model
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
+            keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
         }
         do {
             hasStoredAPIKey = try APIKeyStore().load() != nil

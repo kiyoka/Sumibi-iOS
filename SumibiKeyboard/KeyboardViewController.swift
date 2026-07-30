@@ -1,6 +1,12 @@
 import SumibiCore
 import UIKit
 
+private final class AudioFeedbackInputView: UIInputView, UIInputViewAudioFeedback {
+    var enableInputClicksWhenVisible: Bool {
+        true
+    }
+}
+
 final class KeyboardViewController: UIInputViewController {
     private enum RepeatableKeyKind {
         case letter
@@ -52,6 +58,15 @@ final class KeyboardViewController: UIInputViewController {
     private weak var repeatingButton: UIButton?
     private var isSymbolPanelExpanded = false
     private var isShifted = false
+
+    override func loadView() {
+        let keyboardInputView = AudioFeedbackInputView(
+            frame: .zero,
+            inputViewStyle: .keyboard
+        )
+        inputView = keyboardInputView
+        view = keyboardInputView
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -418,6 +433,7 @@ final class KeyboardViewController: UIInputViewController {
             stopKeyRepeat()
             return
         }
+        playKeyClick()
         switch kind {
         case .letter:
             letterTapped(button)
@@ -520,11 +536,18 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func keyTouchDown() {
-        guard sharedSettings?.loadHapticFeedbackEnabled() ?? true else {
+        playKeyClick()
+        if sharedSettings?.loadHapticFeedbackEnabled() ?? true {
+            hapticFeedbackGenerator.prepare()
+            hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
+        }
+    }
+
+    private func playKeyClick() {
+        guard sharedSettings?.loadKeyClickSoundEnabled() ?? true else {
             return
         }
-        hapticFeedbackGenerator.prepare()
-        hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
+        UIDevice.current.playInputClick()
     }
 
     private func displayedLetter(_ letter: String) -> String {
