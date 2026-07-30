@@ -3,10 +3,19 @@ import Foundation
 public struct ConversionRequest: Equatable, Sendable {
     public let source: String
     public let surroundingContext: String
+    public let mode: ConversionCandidateMode
+    public let currentConversion: String?
 
-    public init(source: String, surroundingContext: String = "") {
+    public init(
+        source: String,
+        surroundingContext: String = "",
+        mode: ConversionCandidateMode = .primary,
+        currentConversion: String? = nil
+    ) {
         self.source = source
         self.surroundingContext = surroundingContext
+        self.mode = mode
+        self.currentConversion = currentConversion
     }
 }
 
@@ -18,17 +27,17 @@ public struct ConversionResponse: Equatable, Sendable {
     }
 }
 
-public enum ConversionCandidatePolicy {
-    public static let longInputThreshold = 10
+public enum ConversionCandidateMode: Equatable, Sendable {
+    case primary
+    case additional
 
-    public static func romanLetterCount(in source: String) -> Int {
-        source.unicodeScalars.lazy.filter { scalar in
-            (65 ... 90).contains(scalar.value) || (97 ... 122).contains(scalar.value)
-        }.count
-    }
-
-    public static func candidateCount(for source: String) -> Int {
-        romanLetterCount(in: source) > longInputThreshold ? 5 : 3
+    public var candidateCount: Int {
+        switch self {
+        case .primary:
+            1
+        case .additional:
+            7
+        }
     }
 }
 
