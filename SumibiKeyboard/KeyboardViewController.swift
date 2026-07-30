@@ -78,6 +78,9 @@ final class KeyboardViewController: UIInputViewController {
 
     private func configureKeyboard() {
         view.backgroundColor = .systemGray5
+        view.layer.cornerCurve = .continuous
+        view.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        view.layer.masksToBounds = true
 
         let numberRow = makeNumberRow()
         let keyRows = UIStackView(arrangedSubviews: [
@@ -138,6 +141,7 @@ final class KeyboardViewController: UIInputViewController {
     private func updateKeyboardHeight() {
         let isLandscape = (view.window?.windowScene?.interfaceOrientation.isLandscape)
             ?? (traitCollection.verticalSizeClass == .compact)
+        view.layer.cornerRadius = isLandscape ? 12 : 16
         let normalHeight: CGFloat = isLandscape ? 216 : 352
         let expandedExtraHeight: CGFloat = isLandscape ? 92 : 120
         keyboardHeightConstraint?.constant = normalHeight
@@ -178,7 +182,9 @@ final class KeyboardViewController: UIInputViewController {
     private func makeCandidateBar() -> UIView {
         let container = UIView()
         container.backgroundColor = .secondarySystemBackground
-        container.layer.cornerRadius = 8
+        container.layer.cornerRadius = 12
+        container.layer.cornerCurve = .continuous
+        container.layer.masksToBounds = true
 
         let icon = UIImage(named: "KeyboardIcon")?.withRenderingMode(.alwaysTemplate)
         let iconView = UIImageView(image: icon)
