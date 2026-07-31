@@ -44,18 +44,20 @@ final class KeyboardViewController: UIInputViewController {
     private var activeRequestID: UUID?
     private var convertButton: UIButton?
     private var keyRowsStack: UIStackView?
-    private var keyboardStack: UIStackView?
     private var candidateBarHeightConstraint: NSLayoutConstraint?
-    private var keyboardStackTopConstraint: NSLayoutConstraint?
-    private var keyboardStackBottomConstraint: NSLayoutConstraint?
+    private var candidateBarBottomSpacingConstraint: NSLayoutConstraint?
+    private var keyRowsHeightConstraint: NSLayoutConstraint?
+    private var keyRowsBottomConstraint: NSLayoutConstraint?
     private var keyboardHeightConstraint: NSLayoutConstraint?
     private var numberDividerCenterYConstraint: NSLayoutConstraint?
+    private var symbolPanelBottomSpacingConstraint: NSLayoutConstraint?
     private var symbolPanelHeightConstraint: NSLayoutConstraint?
     private var symbolPanel: UIStackView?
     private var symbolToggleButton: UIButton?
     private var repeatableKeyKinds: [ObjectIdentifier: RepeatableKeyKind] = [:]
     private var keyRepeatTimer: Timer?
     private weak var repeatingButton: UIButton?
+    private var isCollapsingSymbolPanel = false
     private var isSymbolPanelExpanded = false
     private var isShifted = false
 
@@ -113,45 +115,58 @@ final class KeyboardViewController: UIInputViewController {
         keyRows.axis = .vertical
         keyRows.spacing = 8
         keyRows.distribution = .fillEqually
+        keyRows.translatesAutoresizingMaskIntoConstraints = false
         keyRowsStack = keyRows
         addNumberDivider(to: keyRows, below: numberRow)
 
         let candidateBar = makeCandidateBar()
+        candidateBar.translatesAutoresizingMaskIntoConstraints = false
         let symbolPanel = makeExpandedSymbolPanel()
-        symbolPanel.isHidden = true
+        symbolPanel.translatesAutoresizingMaskIntoConstraints = false
+        symbolPanel.alpha = 0
+        symbolPanel.isUserInteractionEnabled = false
+        symbolPanel.accessibilityElementsHidden = true
         self.symbolPanel = symbolPanel
-        let keyboardStack = UIStackView(arrangedSubviews: [candidateBar, symbolPanel, keyRows])
-        keyboardStack.axis = .vertical
-        keyboardStack.spacing = 8
-        keyboardStack.distribution = .fill
-        keyboardStack.translatesAutoresizingMaskIntoConstraints = false
-        self.keyboardStack = keyboardStack
 
-        view.addSubview(keyboardStack)
+        view.addSubview(candidateBar)
+        view.addSubview(symbolPanel)
+        view.addSubview(keyRows)
         let candidateBarHeightConstraint = candidateBar.heightAnchor.constraint(equalToConstant: 40)
-        let keyboardStackTopConstraint = keyboardStack.topAnchor.constraint(
-            equalTo: view.topAnchor,
-            constant: 8
+        let candidateBarBottomSpacingConstraint = candidateBar.bottomAnchor.constraint(
+            equalTo: symbolPanel.topAnchor
         )
-        let keyboardStackBottomConstraint = keyboardStack.bottomAnchor.constraint(
+        let keyRowsHeightConstraint = keyRows.heightAnchor.constraint(equalToConstant: 288)
+        let keyRowsBottomConstraint = keyRows.bottomAnchor.constraint(
             equalTo: view.bottomAnchor,
             constant: -8
         )
         let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: 352)
-        let symbolPanelHeightConstraint = symbolPanel.heightAnchor.constraint(equalToConstant: 112)
-        symbolPanelHeightConstraint.isActive = false
+        let symbolPanelHeightConstraint = symbolPanel.heightAnchor.constraint(equalToConstant: 0)
+        let symbolPanelBottomSpacingConstraint = symbolPanel.bottomAnchor.constraint(
+            equalTo: keyRows.topAnchor,
+            constant: -8
+        )
         self.candidateBarHeightConstraint = candidateBarHeightConstraint
-        self.keyboardStackTopConstraint = keyboardStackTopConstraint
-        self.keyboardStackBottomConstraint = keyboardStackBottomConstraint
+        self.candidateBarBottomSpacingConstraint = candidateBarBottomSpacingConstraint
+        self.keyRowsHeightConstraint = keyRowsHeightConstraint
+        self.keyRowsBottomConstraint = keyRowsBottomConstraint
         self.keyboardHeightConstraint = keyboardHeightConstraint
         self.symbolPanelHeightConstraint = symbolPanelHeightConstraint
+        self.symbolPanelBottomSpacingConstraint = symbolPanelBottomSpacingConstraint
         NSLayoutConstraint.activate([
             candidateBarHeightConstraint,
-            keyboardStackTopConstraint,
-            keyboardStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-            keyboardStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-            keyboardStackBottomConstraint,
+            candidateBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+            candidateBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            candidateBarBottomSpacingConstraint,
+            symbolPanel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+            symbolPanel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            symbolPanelBottomSpacingConstraint,
+            keyRows.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+            keyRows.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            keyRowsHeightConstraint,
+            keyRowsBottomConstraint,
             keyboardHeightConstraint,
+            symbolPanelHeightConstraint,
         ])
         updateKeyboardHeight()
         showCandidateMessage("ローマ字を入力して変換")
@@ -162,14 +177,21 @@ final class KeyboardViewController: UIInputViewController {
             ?? (traitCollection.verticalSizeClass == .compact)
         view.layer.cornerRadius = isLandscape ? 12 : 16
         let normalHeight: CGFloat = isLandscape ? 216 : 352
-        let expandedExtraHeight: CGFloat = isLandscape ? 92 : 120
+        let sectionSpacing: CGFloat = isLandscape ? 4 : 8
+        let expandedPanelHeight: CGFloat = isLandscape ? 84 : 112
+        let expandedExtraHeight = expandedPanelHeight + sectionSpacing
         keyboardHeightConstraint?.constant = normalHeight
-            + (isSymbolPanelExpanded ? expandedExtraHeight : 0)
-        symbolPanelHeightConstraint?.constant = isLandscape ? 84 : 112
+            + ((isSymbolPanelExpanded || isCollapsingSymbolPanel) ? expandedExtraHeight : 0)
+        symbolPanelHeightConstraint?.constant = isSymbolPanelExpanded
+            ? expandedPanelHeight
+            : 0
         candidateBarHeightConstraint?.constant = isLandscape ? 32 : 40
-        keyboardStackTopConstraint?.constant = isLandscape ? 4 : 8
-        keyboardStackBottomConstraint?.constant = isLandscape ? -4 : -8
-        keyboardStack?.spacing = isLandscape ? 4 : 8
+        candidateBarBottomSpacingConstraint?.constant = isSymbolPanelExpanded
+            ? -sectionSpacing
+            : 0
+        keyRowsHeightConstraint?.constant = isLandscape ? 172 : 288
+        keyRowsBottomConstraint?.constant = isLandscape ? -4 : -8
+        symbolPanelBottomSpacingConstraint?.constant = -sectionSpacing
         keyRowsStack?.spacing = isLandscape ? 4 : 8
         numberDividerCenterYConstraint?.constant = isLandscape ? 2 : 4
         symbolPanel?.spacing = isLandscape ? 4 : 6
@@ -861,14 +883,11 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
+        view.layoutIfNeeded()
+        isCollapsingSymbolPanel = animated && !expanded
         isSymbolPanelExpanded = expanded
-        if expanded {
-            symbolPanel.isHidden = false
-            symbolPanelHeightConstraint?.isActive = true
-        } else {
-            symbolPanelHeightConstraint?.isActive = false
-            symbolPanel.isHidden = true
-        }
+        symbolPanel.isUserInteractionEnabled = expanded
+        symbolPanel.accessibilityElementsHidden = !expanded
         symbolToggleButton?.configuration?.title = expanded ? "戻る" : "記号"
         symbolToggleButton?.accessibilityLabel = expanded
             ? "通常キーボードに戻る"
@@ -880,6 +899,7 @@ final class KeyboardViewController: UIInputViewController {
         updateKeyboardHeight()
 
         let updates = {
+            symbolPanel.alpha = expanded ? 1 : 0
             self.view.layoutIfNeeded()
         }
         if animated {
@@ -888,14 +908,30 @@ final class KeyboardViewController: UIInputViewController {
                 delay: 0,
                 options: [.beginFromCurrentState, .curveEaseInOut],
                 animations: updates
-            )
+            ) { [weak self] _ in
+                guard let self, self.isSymbolPanelExpanded == expanded else {
+                    return
+                }
+                if !expanded {
+                    self.isCollapsingSymbolPanel = false
+                    self.updateKeyboardHeight()
+                    UIView.performWithoutAnimation {
+                        self.view.layoutIfNeeded()
+                    }
+                }
+                UIAccessibility.post(
+                    notification: .layoutChanged,
+                    argument: expanded ? symbolPanel : self.symbolToggleButton
+                )
+            }
         } else {
+            isCollapsingSymbolPanel = false
             updates()
+            UIAccessibility.post(
+                notification: .layoutChanged,
+                argument: expanded ? symbolPanel : symbolToggleButton
+            )
         }
-        UIAccessibility.post(
-            notification: .layoutChanged,
-            argument: expanded ? symbolPanel : symbolToggleButton
-        )
     }
 
     @objc private func symbolToggleTapped() {
