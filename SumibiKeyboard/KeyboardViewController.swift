@@ -7,6 +7,20 @@ private final class AudioFeedbackInputView: UIInputView, UIInputViewAudioFeedbac
     }
 }
 
+private final class ExpandedHitButton: UIButton {
+    var hitTestOutsets = UIEdgeInsets.zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let expandedBounds = CGRect(
+            x: bounds.minX - hitTestOutsets.left,
+            y: bounds.minY - hitTestOutsets.top,
+            width: bounds.width + hitTestOutsets.left + hitTestOutsets.right,
+            height: bounds.height + hitTestOutsets.top + hitTestOutsets.bottom
+        )
+        return expandedBounds.contains(point)
+    }
+}
+
 final class KeyboardViewController: UIInputViewController {
     private enum RepeatableKeyKind {
         case letter
@@ -243,10 +257,16 @@ final class KeyboardViewController: UIInputViewController {
         candidateStack.alignment = .center
         candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let handleButton = UIButton(type: .system)
+        let handleButton = ExpandedHitButton(type: .system)
         handleButton.setTitle("━", for: .normal)
         handleButton.setTitleColor(.secondaryLabel, for: .normal)
-        handleButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        handleButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .black)
+        handleButton.hitTestOutsets = UIEdgeInsets(
+            top: 2,
+            left: 40,
+            bottom: 23,
+            right: 40
+        )
         handleButton.accessibilityLabel = "記号一覧ハンドル"
         handleButton.accessibilityHint = "上へスワイプして開き、下へスワイプして閉じます"
         handleButton.addTarget(self, action: #selector(symbolHandleTapped), for: .touchUpInside)
@@ -276,9 +296,9 @@ final class KeyboardViewController: UIInputViewController {
             candidateStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             candidateStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
             handleButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            handleButton.topAnchor.constraint(equalTo: container.topAnchor, constant: -2),
-            handleButton.widthAnchor.constraint(equalToConstant: 44),
-            handleButton.heightAnchor.constraint(equalToConstant: 16),
+            handleButton.topAnchor.constraint(equalTo: container.topAnchor, constant: -1),
+            handleButton.widthAnchor.constraint(equalToConstant: 52),
+            handleButton.heightAnchor.constraint(equalToConstant: 18),
         ])
         return container
     }
