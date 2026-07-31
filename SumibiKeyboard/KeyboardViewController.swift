@@ -7,20 +7,6 @@ private final class AudioFeedbackInputView: UIInputView, UIInputViewAudioFeedbac
     }
 }
 
-private final class ExpandedHitButton: UIButton {
-    var hitTestOutsets = UIEdgeInsets.zero
-
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        let expandedBounds = CGRect(
-            x: bounds.minX - hitTestOutsets.left,
-            y: bounds.minY - hitTestOutsets.top,
-            width: bounds.width + hitTestOutsets.left + hitTestOutsets.right,
-            height: bounds.height + hitTestOutsets.top + hitTestOutsets.bottom
-        )
-        return expandedBounds.contains(point)
-    }
-}
-
 final class KeyboardViewController: UIInputViewController {
     private enum RepeatableKeyKind {
         case letter
@@ -279,30 +265,9 @@ final class KeyboardViewController: UIInputViewController {
         candidateStack.alignment = .center
         candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let handleButton = ExpandedHitButton(type: .system)
-        handleButton.setTitle("━", for: .normal)
-        handleButton.setTitleColor(.secondaryLabel, for: .normal)
-        handleButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .black)
-        handleButton.hitTestOutsets = UIEdgeInsets(
-            top: 2,
-            left: 40,
-            bottom: 23,
-            right: 40
-        )
-        handleButton.accessibilityLabel = "記号一覧ハンドル"
-        handleButton.accessibilityHint = "上へスワイプして開き、下へスワイプして閉じます"
-        handleButton.addTarget(self, action: #selector(symbolHandleTapped), for: .touchUpInside)
-        let panGesture = UIPanGestureRecognizer(
-            target: self,
-            action: #selector(symbolHandlePanned)
-        )
-        handleButton.addGestureRecognizer(panGesture)
-        handleButton.translatesAutoresizingMaskIntoConstraints = false
-
         container.addSubview(iconView)
         container.addSubview(clipboardButton)
         container.addSubview(scrollView)
-        container.addSubview(handleButton)
         scrollView.addSubview(candidateStack)
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 6),
@@ -322,10 +287,6 @@ final class KeyboardViewController: UIInputViewController {
             candidateStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             candidateStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             candidateStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
-            handleButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            handleButton.topAnchor.constraint(equalTo: container.topAnchor, constant: -1),
-            handleButton.widthAnchor.constraint(equalToConstant: 52),
-            handleButton.heightAnchor.constraint(equalToConstant: 18),
         ])
         return container
     }
@@ -445,6 +406,9 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             symbolButton.accessibilityHint = "タップで記号一覧を開きます"
         }
+        symbolButton.titleLabel?.numberOfLines = 1
+        symbolButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        symbolButton.titleLabel?.minimumScaleFactor = 0.65
         symbolToggleButton = symbolButton
 
         let spaceButton = makeSpecialButton(
@@ -468,12 +432,15 @@ final class KeyboardViewController: UIInputViewController {
 
         let row = makeRow([symbolButton, spaceButton, convertButton, returnButton])
         row.distribution = .fill
-        spaceButton.widthAnchor.constraint(
-            equalTo: symbolButton.widthAnchor,
-            multiplier: 3
+        symbolButton.widthAnchor.constraint(
+            equalTo: convertButton.widthAnchor,
+            multiplier: 1.35
         ).isActive = true
-        convertButton.widthAnchor.constraint(equalTo: symbolButton.widthAnchor).isActive = true
-        returnButton.widthAnchor.constraint(equalTo: symbolButton.widthAnchor).isActive = true
+        spaceButton.widthAnchor.constraint(
+            equalTo: convertButton.widthAnchor,
+            multiplier: 2.65
+        ).isActive = true
+        returnButton.widthAnchor.constraint(equalTo: convertButton.widthAnchor).isActive = true
         return row
     }
 
@@ -968,7 +935,8 @@ final class KeyboardViewController: UIInputViewController {
         isSymbolPanelExpanded = expanded
         symbolPanel.isUserInteractionEnabled = expanded
         symbolPanel.accessibilityElementsHidden = !expanded
-        symbolToggleButton?.configuration?.title = expanded ? "戻る" : "記号"
+        symbolToggleButton?.configuration?.title = expanded ? "記号[閉]" : "記号"
+        symbolToggleButton?.titleLabel?.font = .systemFont(ofSize: expanded ? 14 : 20)
         symbolToggleButton?.accessibilityLabel = expanded
             ? "通常キーボードに戻る"
             : "記号一覧"
@@ -1016,22 +984,6 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func symbolToggleTapped() {
         setSymbolPanelExpanded(!isSymbolPanelExpanded, animated: true)
-    }
-
-    @objc private func symbolHandleTapped() {
-        symbolToggleTapped()
-    }
-
-    @objc private func symbolHandlePanned(_ gesture: UIPanGestureRecognizer) {
-        guard gesture.state == .ended else {
-            return
-        }
-        let verticalMovement = gesture.translation(in: gesture.view).y
-        if verticalMovement <= -20 {
-            setSymbolPanelExpanded(true, animated: true)
-        } else if verticalMovement >= 20 {
-            setSymbolPanelExpanded(false, animated: true)
-        }
     }
 
     @objc private func symbolButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
