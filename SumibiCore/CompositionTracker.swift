@@ -23,6 +23,7 @@ public struct CompositionTracker: Equatable, Sendable {
     public private(set) var source = ""
     public private(set) var revision: UInt64 = 0
     public private(set) var isReplaceable = true
+    public private(set) var respectsSlashBoundary = true
 
     public var expectedSuffix: String {
         String(source.suffix(maximumSuffixLength))
@@ -60,6 +61,21 @@ public struct CompositionTracker: Equatable, Sendable {
     }
 
     @discardableResult
+    public mutating func startComposition(
+        with text: String,
+        respectsSlashBoundary: Bool = true
+    ) -> Bool {
+        guard !text.isEmpty, text.count <= maximumSourceLength else {
+            return false
+        }
+        source = text
+        isReplaceable = true
+        self.respectsSlashBoundary = respectsSlashBoundary
+        revision &+= 1
+        return true
+    }
+
+    @discardableResult
     public mutating func deleteLast() -> Bool {
         guard isReplaceable, !source.isEmpty else {
             return false
@@ -77,6 +93,7 @@ public struct CompositionTracker: Equatable, Sendable {
     public mutating func reset() {
         source.removeAll(keepingCapacity: true)
         isReplaceable = true
+        respectsSlashBoundary = true
         revision &+= 1
     }
 
@@ -98,7 +115,7 @@ public struct CompositionTracker: Equatable, Sendable {
 
         let conversionSource: String
         let textToReplace: String
-        if let boundary = source.lastIndex(of: "/") {
+        if respectsSlashBoundary, let boundary = source.lastIndex(of: "/") {
             let targetStart = source.index(after: boundary)
             conversionSource = String(source[targetStart...])
             textToReplace = String(source[boundary...])
