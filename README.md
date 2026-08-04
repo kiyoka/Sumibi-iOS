@@ -1,6 +1,6 @@
 # Sumibi-iOS
 
-<img src="SumibiApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png" alt="Sumibiアプリアイコン" width="160">
+<img src="docs/images/sumibi-home-screen.png" alt="iPhoneホーム画面上のSumibiアプリ" width="180">
 
 iOS向けの日本語入力IME（カスタムキーボード）です。ローマ字または英語で入力し、LLM（大規模言語モデル）を使って自然な日本語へ変換します。
 
