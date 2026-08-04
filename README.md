@@ -1,5 +1,7 @@
 # Sumibi-iOS
 
+<img src="SumibiApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png" alt="Sumibiアプリアイコン" width="160">
+
 iOS向けの日本語入力IME（カスタムキーボード）です。ローマ字または英語で入力し、LLM（大規模言語モデル）を使って自然な日本語へ変換します。
 
 Emacs版の [Sumibi](https://github.com/kiyoka/Sumibi) が持つ「モードレス」な入力方式（かな漢字変換モードへの切り替えを意識せず、英字QWERTYのまま日本語を書ける方式）を、iPhone / iPadのカスタムキーボード拡張として実現するプロジェクトです。
