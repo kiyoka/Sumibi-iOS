@@ -22,6 +22,7 @@ private struct ContentView: View {
     @State private var isTesting = false
     @State private var hapticFeedbackEnabled = true
     @State private var keyClickSoundEnabled = true
+    @State private var userDictionary = ""
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,7 @@ private struct ContentView: View {
                 introductionSection
                 providerSection
                 keyboardBehaviorSection
+                userDictionarySection
                 conversionTestSection
                 keyboardSetupSection
                 privacySection
@@ -124,6 +126,33 @@ private struct ContentView: View {
         }
     }
 
+    private var userDictionarySection: some View {
+        Section {
+            NavigationLink {
+                UserDictionaryEditor(
+                    initialText: userDictionary,
+                    onSave: { savedText in
+                        userDictionary = savedText
+                    }
+                )
+            } label: {
+                HStack {
+                    Label("ユーザー辞書", systemImage: "character.book.closed")
+                    Spacer()
+                    Text(userDictionarySummary)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } footer: {
+            Text("登録内容はすべての変換リクエストへ送信されます。")
+        }
+    }
+
+    private var userDictionarySummary: String {
+        let count = UserDictionary.validate(userDictionary).entries.count
+        return count == 0 ? "未設定" : "\(count)件"
+    }
+
     private var keyboardBehaviorSection: some View {
         Section {
             Toggle("キー入力の触覚フィードバック", isOn: $hapticFeedbackEnabled)
@@ -193,6 +222,7 @@ private struct ContentView: View {
             model = configuration.model
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
+            userDictionary = store.loadUserDictionary()
         }
         do {
             hasStoredAPIKey = try APIKeyStore().load() != nil
@@ -260,7 +290,10 @@ private struct ContentView: View {
                 )
             )
             let response = try await client.convert(
-                ConversionRequest(source: testSource)
+                ConversionRequest(
+                    source: testSource,
+                    userDictionary: userDictionary
+                )
             )
             testResult = response.candidates.first ?? "候補がありません。"
         } catch let error as OpenAICompatibleClientError {
@@ -289,5 +322,153 @@ private struct ContentView: View {
         case .httpError:
             "APIリクエストに失敗しました。"
         }
+    }
+}
+
+private struct UserDictionaryEditor: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let initialText: String
+    let onSave: (String) -> Void
+
+    @State private var text: String
+    @State private var errors: [UserDictionaryValidationError] = []
+    @State private var showsDiscardConfirmation = false
+    @State private var saveMessage = ""
+
+    init(initialText: String, onSave: @escaping (String) -> Void) {
+        self.initialText = initialText
+        self.onSave = onSave
+        _text = State(initialValue: initialText)
+    }
+
+    private var hasChanges: Bool { text != initialText }
+
+    private var nonemptyLineCount: Int {
+        text.split(separator: "\n").filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+    }
+
+    private var exceedsLimit: Bool {
+        nonemptyLineCount > UserDictionary.maximumEntryCount
+            || text.count > UserDictionary.maximumCharacterCount
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !errors.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(errors) { error in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(error.lineNumber.map { "\($0)行目：\(error.reason)" } ?? error.reason)
+                                    .font(.footnote.bold())
+                                    .foregroundStyle(.red)
+                                if let line = error.line {
+                                    Text(line)
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 150)
+                .padding(.horizontal)
+            }
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $text)
+                    .font(.body.monospaced())
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 8)
+                    .onChange(of: text) { _, _ in
+                        errors = []
+                        saveMessage = ""
+                    }
+                if text.isEmpty {
+                    Text("sumibi = Sumibi\nkiyoka = 清香\nopenai = OpenAI")
+                        .font(.body.monospaced())
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            HStack {
+                Text("1行につき「よみ = 変換後」")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(nonemptyLineCount)件・\(text.count)/2,000文字")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(exceedsLimit ? .red : .secondary)
+            }
+            .padding(.horizontal)
+
+            if !saveMessage.isEmpty {
+                Text(saveMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal)
+            }
+        }
+        .navigationTitle("ユーザー辞書")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    requestDismissal()
+                } label: {
+                    Label("戻る", systemImage: "chevron.left")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("保存") {
+                    save()
+                }
+                .disabled(exceedsLimit)
+            }
+        }
+        .interactiveDismissDisabled(hasChanges)
+        .confirmationDialog(
+            "変更を破棄しますか？",
+            isPresented: $showsDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("破棄", role: .destructive) { dismiss() }
+            Button("編集を続ける", role: .cancel) {}
+        } message: {
+            Text("保存していない変更があります。")
+        }
+    }
+
+    private func requestDismissal() {
+        if hasChanges {
+            showsDiscardConfirmation = true
+        } else {
+            dismiss()
+        }
+    }
+
+    private func save() {
+        let result = UserDictionary.validate(text)
+        guard result.isValid else {
+            errors = result.errors
+            return
+        }
+        guard let store = SharedSettingsStore() else {
+            saveMessage = "共有設定を利用できません。"
+            return
+        }
+        store.saveUserDictionary(text)
+        onSave(text)
+        dismiss()
     }
 }

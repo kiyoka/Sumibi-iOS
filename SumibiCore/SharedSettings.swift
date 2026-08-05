@@ -23,6 +23,7 @@ public struct SharedSettingsStore {
         static let providerConfiguration = "providerConfiguration"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
+        static let userDictionary = "userDictionary"
     }
 
     private let defaults: UserDefaults
@@ -90,5 +91,13 @@ public struct SharedSettingsStore {
 
     public func saveKeyClickSoundEnabled(_ isEnabled: Bool) {
         defaults.set(isEnabled, forKey: Key.keyClickSoundEnabled)
+    }
+
+    public func loadUserDictionary() -> String {
+        defaults.string(forKey: Key.userDictionary) ?? ""
+    }
+
+    public func saveUserDictionary(_ dictionary: String) {
+        defaults.set(dictionary, forKey: Key.userDictionary)
     }
 }

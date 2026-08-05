@@ -5,17 +5,20 @@ public struct ConversionRequest: Equatable, Sendable {
     public let surroundingContext: String
     public let mode: ConversionCandidateMode
     public let currentConversion: String?
+    public let userDictionary: String
 
     public init(
         source: String,
         surroundingContext: String = "",
         mode: ConversionCandidateMode = .primary,
-        currentConversion: String? = nil
+        currentConversion: String? = nil,
+        userDictionary: String = ""
     ) {
         self.source = source
         self.surroundingContext = surroundingContext
         self.mode = mode
         self.currentConversion = currentConversion
+        self.userDictionary = userDictionary
     }
 }
 

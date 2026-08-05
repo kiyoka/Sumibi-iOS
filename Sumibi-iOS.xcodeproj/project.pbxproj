@@ -22,6 +22,7 @@
 		A1000000000000000000000D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* PrivacyInfo.xcprivacy */; };
 		A1000000000000000000000E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Assets.xcassets */; };
 		A1000000000000000000000F /* KeyboardIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* KeyboardIcon.png */; };
+		A10000000000000000000010 /* UserDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* UserDictionary.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +81,7 @@
 		A2000000000000000000000F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A20000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000011 /* KeyboardIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = KeyboardIcon.png; sourceTree = "<group>"; };
+		A20000000000000000000012 /* UserDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDictionary.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +152,7 @@
 				A2000000000000000000000E /* OpenAICompatibleClient.swift */,
 				A20000000000000000000003 /* SumibiCore.swift */,
 				A20000000000000000000008 /* SharedSettings.swift */,
+				A20000000000000000000012 /* UserDictionary.swift */,
 			);
 			path = SumibiCore;
 			sourceTree = "<group>";
@@ -317,6 +320,7 @@
 				A1000000000000000000000A /* ConversionClient.swift in Sources */,
 				A1000000000000000000000B /* OpenAICompatibleClient.swift in Sources */,
 				A10000000000000000000003 /* SumibiCore.swift in Sources */,
+				A10000000000000000000010 /* UserDictionary.swift in Sources */,
 				A10000000000000000000007 /* SharedSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
