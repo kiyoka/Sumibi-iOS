@@ -164,6 +164,7 @@ private struct ContentView: View {
         Section {
             Label("変換キーを押したときだけ送信", systemImage: "hand.tap")
             Label("変換対象と最小限の周辺文脈を送信", systemImage: "text.quote")
+            Label("登録したユーザー辞書は毎回あわせて送信", systemImage: "character.book.closed")
             Label("キー入力や原文をログへ保存しない", systemImage: "doc.badge.ellipsis")
             Label("Sumibi運営のサーバーを経由しない", systemImage: "arrow.left.arrow.right")
             Label("APIキーは端末内のKeychainへ保存", systemImage: "key")
