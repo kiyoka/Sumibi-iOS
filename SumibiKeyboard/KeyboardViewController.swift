@@ -1078,7 +1078,8 @@ final class KeyboardViewController: UIInputViewController {
             : ""
         let request = ConversionRequest(
             source: snapshot.source,
-            surroundingContext: surroundingContext
+            surroundingContext: surroundingContext,
+            userDictionary: sharedSettings?.loadUserDictionary() ?? ""
         )
         conversionTask = Task { [weak self, conversionClient] in
             do {
@@ -1135,7 +1136,8 @@ final class KeyboardViewController: UIInputViewController {
             source: session.original,
             surroundingContext: session.surroundingContext,
             mode: .additional,
-            currentConversion: session.current
+            currentConversion: session.current,
+            userDictionary: sharedSettings?.loadUserDictionary() ?? ""
         )
         conversionTask = Task { [weak self, conversionClient] in
             do {
