@@ -24,6 +24,7 @@ public struct SharedSettingsStore {
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
         static let userDictionary = "userDictionary"
+        static let aiDataSharingConsentEndpoint = "aiDataSharingConsentEndpoint"
     }
 
     private let defaults: UserDefaults
@@ -99,5 +100,25 @@ public struct SharedSettingsStore {
 
     public func saveUserDictionary(_ dictionary: String) {
         defaults.set(dictionary, forKey: Key.userDictionary)
+    }
+
+    public func hasAIDataSharingConsent(for endpoint: String) -> Bool {
+        let normalizedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedEndpoint.isEmpty else {
+            return false
+        }
+        return defaults.string(forKey: Key.aiDataSharingConsentEndpoint) == normalizedEndpoint
+    }
+
+    public func saveAIDataSharingConsent(for endpoint: String) {
+        let normalizedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedEndpoint.isEmpty else {
+            return
+        }
+        defaults.set(normalizedEndpoint, forKey: Key.aiDataSharingConsentEndpoint)
+    }
+
+    public func revokeAIDataSharingConsent() {
+        defaults.removeObject(forKey: Key.aiDataSharingConsentEndpoint)
     }
 }

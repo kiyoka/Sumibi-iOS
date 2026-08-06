@@ -23,6 +23,7 @@ private struct ContentView: View {
     @State private var hapticFeedbackEnabled = true
     @State private var keyClickSoundEnabled = true
     @State private var userDictionary = ""
+    @State private var hasAIDataSharingConsent = false
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,13 @@ private struct ContentView: View {
             .navigationTitle("Sumibi")
             .task {
                 loadSettings()
+            }
+            .onChange(of: endpoint) { _, newEndpoint in
+                hasAIDataSharingConsent = SharedSettingsStore()?
+                    .hasAIDataSharingConsent(for: newEndpoint) ?? false
+            }
+            .onChange(of: hasAIDataSharingConsent) { _, isEnabled in
+                updateAIDataSharingConsent(isEnabled)
             }
         }
     }
@@ -191,16 +199,55 @@ private struct ContentView: View {
 
     private var privacySection: some View {
         Section {
+            Text("送信先：\(normalizedEndpointDisplay)")
+                .font(.footnote)
+                .textSelection(.enabled)
+            Toggle(
+                "この第三者AIへのデータ送信に同意する",
+                isOn: $hasAIDataSharingConsent
+            )
             Label("変換キーを押したときだけ送信", systemImage: "hand.tap")
             Label("変換対象と最小限の周辺文脈を送信", systemImage: "text.quote")
             Label("登録したユーザー辞書は毎回あわせて送信", systemImage: "character.book.closed")
             Label("キー入力や原文をログへ保存しない", systemImage: "doc.badge.ellipsis")
             Label("Sumibi運営のサーバーを経由しない", systemImage: "arrow.left.arrow.right")
             Label("APIキーは端末内のKeychainへ保存", systemImage: "key")
+            Link(
+                "プライバシーポリシーを確認",
+                destination: URL(string: "https://kiyoka.github.io/Sumibi-iOS/privacy.html")!
+            )
         } header: {
             Text("プライバシー")
         } footer: {
-            Text("送信先でのデータ処理は、利用者が選択したAPIプロバイダーの規約に従います。")
+            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書を上記の第三者AIへ送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
+        }
+    }
+
+    private var normalizedEndpointDisplay: String {
+        let normalized = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? "未設定" : normalized
+    }
+
+    private func updateAIDataSharingConsent(_ isEnabled: Bool) {
+        guard let store = SharedSettingsStore() else {
+            hasAIDataSharingConsent = false
+            statusMessage = "共有設定を利用できません。"
+            return
+        }
+        if isEnabled {
+            let normalized = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard URL(string: normalized) != nil, !normalized.isEmpty else {
+                hasAIDataSharingConsent = false
+                statusMessage = "同意する前に有効なAPIのURLを設定してください。"
+                return
+            }
+            store.saveAIDataSharingConsent(for: normalized)
+            hasAIDataSharingConsent = true
+            statusMessage = "AIへのデータ送信に同意しました。"
+        } else {
+            store.revokeAIDataSharingConsent()
+            hasAIDataSharingConsent = false
+            statusMessage = "AIへのデータ送信の同意を取り消しました。"
         }
     }
 
@@ -223,6 +270,7 @@ private struct ContentView: View {
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
             userDictionary = store.loadUserDictionary()
+            hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)
         }
         do {
             hasStoredAPIKey = try APIKeyStore().load() != nil
@@ -272,6 +320,10 @@ private struct ContentView: View {
         let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let endpointURL = URL(string: normalizedEndpoint), !normalizedModel.isEmpty else {
             testResult = "APIのURLとモデル名を入力してください。"
+            return
+        }
+        guard SharedSettingsStore()?.hasAIDataSharingConsent(for: normalizedEndpoint) == true else {
+            testResult = "プライバシー欄で、第三者AIへのデータ送信に同意してください。"
             return
         }
 
