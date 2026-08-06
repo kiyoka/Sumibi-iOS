@@ -914,6 +914,10 @@ final class KeyboardViewController: UIInputViewController {
             showCandidateMessage("API変換にはフルアクセスが必要です")
             return nil
         }
+        guard sharedSettings?.hasAIDataSharingConsent(for: configuration.endpoint) == true else {
+            showCandidateMessage("SumibiアプリでAIへのデータ送信に同意してください")
+            return nil
+        }
 
         let apiKey = try? APIKeyStore().load()
         return OpenAICompatibleClient(
