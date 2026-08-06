@@ -1,0 +1,55 @@
+:root {
+  color-scheme: light dark;
+  --background: #fffaf5;
+  --surface: rgba(255, 255, 255, 0.82);
+  --text: #2b211b;
+  --muted: #6f6259;
+  --accent: #b44824;
+  --border: #e8d9cd;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1d1815;
+    --surface: rgba(45, 36, 31, 0.9);
+    --text: #fff5ec;
+    --muted: #cbb9ab;
+    --accent: #ff9a70;
+    --border: #5a463a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(224, 104, 57, 0.16), transparent 32rem),
+    var(--background);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  line-height: 1.75;
+}
+
+main {
+  width: min(100% - 2rem, 760px);
+  margin: 0 auto;
+  padding: 4rem 0;
+}
+
+header { margin-bottom: 2.5rem; }
+h1 { margin: 0 0 0.5rem; font-size: clamp(2rem, 7vw, 3.5rem); line-height: 1.2; }
+h2 { margin-top: 2.5rem; line-height: 1.4; }
+p, li { overflow-wrap: anywhere; }
+.lead { color: var(--muted); font-size: 1.08rem; }
+.card {
+  margin: 1rem 0;
+  padding: 1.25rem 1.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+a { color: var(--accent); text-underline-offset: 0.2em; }
+nav { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin-top: 1.5rem; }
+footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
