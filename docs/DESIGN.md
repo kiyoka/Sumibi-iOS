@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語へ変換するiOSカスタムキーボードである。Emacs版Sumibiのモードレスな入力方式をiPhoneとiPadで実現する。
+Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語へ変換するiOSカスタムキーボードである。Emacs版Sumibiのモードレスな入力方式をiPhoneで実現する。初回リリースのコンテナアプリはiPhone専用とし、iPadへのネイティブ対応は将来の対象とする。
 
 ## 2. 製品原則
 
@@ -36,6 +36,7 @@ Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語�
 - 日本語から英語への翻訳
 - クラウド同期
 - 音声入力
+- iPadへのネイティブ対応
 
 ## 4. システム構成
 
@@ -77,6 +78,12 @@ Sumibi-iOSは、ローマ字または英語の文章をLLMで自然な日本語�
 ### 共有設定
 
 コンテナアプリとキーボード拡張は、機密情報ではない設定をApp Groupの`UserDefaults`で共有する。APIキーは共有UserDefaultsや共有ファイルへ保存せず、App Groupをアクセスグループとして利用する共有Keychainへ保存する。
+
+Targeted Device Familyの規則：
+
+- `SumibiApp`はiPhoneのみ（`1`）とする。
+- `SumibiKeyboard`はApp Extensionの配布要件に従いiPhone/iPad（`1,2`）とする。
+- `SumibiCore`はUniversalのキーボード拡張から参照されるためiPhone/iPad（`1,2`）を維持する。
 
 APIキー共有の規則：
 

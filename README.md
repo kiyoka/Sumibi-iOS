@@ -4,7 +4,7 @@
 
 iOS向けの日本語入力IME（カスタムキーボード）です。ローマ字または英語で入力し、LLM（大規模言語モデル）を使って自然な日本語へ変換します。
 
-Emacs版の [Sumibi](https://github.com/kiyoka/Sumibi) が持つ「モードレス」な入力方式（かな漢字変換モードへの切り替えを意識せず、英字QWERTYのまま日本語を書ける方式）を、iPhone / iPadのカスタムキーボード拡張として実現するプロジェクトです。
+Emacs版の [Sumibi](https://github.com/kiyoka/Sumibi) が持つ「モードレス」な入力方式（かな漢字変換モードへの切り替えを意識せず、英字QWERTYのまま日本語を書ける方式）を、iPhoneのカスタムキーボード拡張として実現するプロジェクトです。初回リリースのコンテナアプリはiPhone専用です。
 
 ## 特徴
 
@@ -28,7 +28,7 @@ Emacs版の [Sumibi](https://github.com/kiyoka/Sumibi) が持つ「モードレ�
 
 ## 動作要件
 
-- **ローカルで実機ビルドする場合の注意** — このプロジェクトは、コンテナアプリとキーボード拡張の間で設定やAPIキーを共有するためにApp Groupsを使用しています。現在の構成のままiPhone / iPadへインストールして動作させるには、実機を所有しているだけでは足りず、原則として有料の[Apple Developer Program](https://developer.apple.com/jp/support/compare-memberships/)への年間登録が必要です。無料のPersonal Teamでは利用できる機能やプロビジョニングに制限があり、App Groupsを含む本プロジェクトをそのまま動作させられない場合があります。登録条件や料金は変更される可能性があるため、Appleの最新情報を確認してください。
+- **ローカルで実機ビルドする場合の注意** — このプロジェクトは、コンテナアプリとキーボード拡張の間で設定やAPIキーを共有するためにApp Groupsを使用しています。現在の構成のままiPhoneへインストールして動作させるには、実機を所有しているだけでは足りず、原則として有料の[Apple Developer Program](https://developer.apple.com/jp/support/compare-memberships/)への年間登録が必要です。無料のPersonal Teamでは利用できる機能やプロビジョニングに制限があり、App Groupsを含む本プロジェクトをそのまま動作させられない場合があります。登録条件や料金は変更される可能性があるため、Appleの最新情報を確認してください。
 - 変換にはネットワーク通信と共有Keychainへのアクセスが必要なため、設定アプリでキーボードの「フルアクセスを許可」を有効にする必要があります。
 - 変換にはOpenAI互換API（OpenAI本家、または互換のローカル／クラウドサーバー）のエンドポイントとAPIキーが必要です。エンドポイントを`/v1`または完全な`/chat/completions` URLとして指定することもできます。
 
