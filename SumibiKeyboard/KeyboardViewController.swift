@@ -396,16 +396,7 @@ final class KeyboardViewController: UIInputViewController {
         )
         symbolButton.accessibilityIdentifier = "symbol-toggle"
         symbolButton.accessibilityValue = "非表示"
-        if needsInputModeSwitchKey {
-            symbolButton.accessibilityHint = "長押しで次のキーボードへ切り替えます"
-            let longPressGesture = UILongPressGestureRecognizer(
-                target: self,
-                action: #selector(symbolButtonLongPressed)
-            )
-            symbolButton.addGestureRecognizer(longPressGesture)
-        } else {
-            symbolButton.accessibilityHint = "タップで記号一覧を開きます"
-        }
+        symbolButton.accessibilityHint = "タップで記号一覧を開きます"
         symbolButton.titleLabel?.numberOfLines = 1
         symbolButton.titleLabel?.adjustsFontSizeToFitWidth = true
         symbolButton.titleLabel?.minimumScaleFactor = 0.65
@@ -430,7 +421,23 @@ final class KeyboardViewController: UIInputViewController {
         self.convertButton = convertButton
         refreshConvertButton()
 
-        let row = makeRow([symbolButton, spaceButton, convertButton, returnButton])
+        var buttons: [UIButton] = [symbolButton]
+        if needsInputModeSwitchKey {
+            let nextKeyboardButton = makeSpecialButton(
+                title: "",
+                accessibilityLabel: "次のキーボード",
+                action: #selector(nextKeyboardTapped)
+            )
+            nextKeyboardButton.configuration?.image = UIImage(systemName: "globe")
+            nextKeyboardButton.accessibilityHint = "次のキーボードへ切り替えます"
+            buttons.append(nextKeyboardButton)
+            nextKeyboardButton.widthAnchor.constraint(
+                equalTo: convertButton.widthAnchor
+            ).isActive = true
+        }
+        buttons.append(contentsOf: [spaceButton, convertButton, returnButton])
+
+        let row = makeRow(buttons)
         row.distribution = .fill
         symbolButton.widthAnchor.constraint(
             equalTo: convertButton.widthAnchor,
@@ -945,9 +952,7 @@ final class KeyboardViewController: UIInputViewController {
             ? "通常キーボードに戻る"
             : "記号一覧"
         symbolToggleButton?.accessibilityValue = expanded ? "表示中" : "非表示"
-        symbolToggleButton?.accessibilityHint = needsInputModeSwitchKey
-            ? "タップで\(expanded ? "閉じます" : "開きます")。長押しで次のキーボードへ切り替えます"
-            : "タップで\(expanded ? "閉じます" : "開きます")"
+        symbolToggleButton?.accessibilityHint = "タップで\(expanded ? "閉じます" : "開きます")"
         updateKeyboardHeight()
 
         let updates = {
@@ -990,10 +995,7 @@ final class KeyboardViewController: UIInputViewController {
         setSymbolPanelExpanded(!isSymbolPanelExpanded, animated: true)
     }
 
-    @objc private func symbolButtonLongPressed(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, needsInputModeSwitchKey else {
-            return
-        }
+    @objc private func nextKeyboardTapped() {
         advanceToNextInputMode()
     }
 
