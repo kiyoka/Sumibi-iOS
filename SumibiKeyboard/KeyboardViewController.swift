@@ -421,24 +421,20 @@ final class KeyboardViewController: UIInputViewController {
         self.convertButton = convertButton
         refreshConvertButton()
 
-        var buttons: [UIButton] = [symbolButton]
-        if needsInputModeSwitchKey {
-            let nextKeyboardButton = makeSpecialButton(
-                title: "",
-                accessibilityLabel: "次のキーボード",
-                action: #selector(nextKeyboardTapped)
-            )
-            nextKeyboardButton.configuration?.image = UIImage(systemName: "globe")
-            nextKeyboardButton.accessibilityHint = "次のキーボードへ切り替えます"
-            buttons.append(nextKeyboardButton)
-            nextKeyboardButton.widthAnchor.constraint(
-                equalTo: convertButton.widthAnchor
-            ).isActive = true
-        }
-        buttons.append(contentsOf: [spaceButton, convertButton, returnButton])
+        let nextKeyboardButton = makeSpecialButton(
+            title: "",
+            accessibilityLabel: "次のキーボード",
+            action: #selector(nextKeyboardTapped)
+        )
+        nextKeyboardButton.configuration?.image = UIImage(systemName: "globe")
+        nextKeyboardButton.accessibilityHint = "次のキーボードへ切り替えます"
+        let buttons = [symbolButton, nextKeyboardButton, spaceButton, convertButton, returnButton]
 
         let row = makeRow(buttons)
         row.distribution = .fill
+        nextKeyboardButton.widthAnchor.constraint(
+            equalTo: convertButton.widthAnchor
+        ).isActive = true
         symbolButton.widthAnchor.constraint(
             equalTo: convertButton.widthAnchor,
             multiplier: 1.35
