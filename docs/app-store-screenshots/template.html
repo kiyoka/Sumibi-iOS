@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1320, initial-scale=1">
+  <title>Sumibi App Store Screenshot Template</title>
+  <style>
+    :root {
+      --ink: #171310;
+      --paper: #fffaf4;
+      --ember: #f06432;
+      --ember-light: #ffb178;
+      --muted: #715f52;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 1320px;
+      height: 2868px;
+      margin: 0;
+      overflow: hidden;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    }
+
+    .artboard {
+      position: relative;
+      width: 1320px;
+      height: 2868px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 102% 4%, rgba(240, 100, 50, .30) 0 15%, transparent 31%),
+        radial-gradient(circle at -8% 38%, rgba(255, 177, 120, .22) 0 12%, transparent 30%),
+        linear-gradient(160deg, #fffdf9 0%, #fff6ec 56%, #f8e8d9 100%);
+    }
+
+    .brand {
+      position: absolute;
+      top: 105px;
+      left: 110px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      font-size: 42px;
+      font-weight: 760;
+      letter-spacing: .02em;
+    }
+
+    .brand img {
+      width: 86px;
+      height: 86px;
+      border-radius: 21px;
+      box-shadow: 0 15px 40px rgba(51, 29, 16, .18);
+    }
+
+    .number {
+      position: absolute;
+      top: 122px;
+      right: 112px;
+      color: var(--ember);
+      font-size: 34px;
+      font-weight: 750;
+      letter-spacing: .08em;
+    }
+
+    .copy {
+      position: absolute;
+      top: 300px;
+      left: 110px;
+      width: 1100px;
+      z-index: 2;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 1080px;
+      font-size: 98px;
+      line-height: 1.22;
+      letter-spacing: -.045em;
+      font-weight: 830;
+      white-space: pre-line;
+    }
+
+    .accent { color: var(--ember); }
+
+    .supporting {
+      margin-top: 36px;
+      max-width: 1050px;
+      color: var(--muted);
+      font-size: 42px;
+      line-height: 1.55;
+      font-weight: 560;
+      white-space: pre-line;
+    }
+
+    .phone {
+      position: absolute;
+      top: 850px;
+      left: 118px;
+      width: 1084px;
+      height: 2185px;
+      padding: 30px;
+      border-radius: 112px;
+      background: #161412;
+      box-shadow: 0 70px 120px rgba(69, 42, 24, .27), 0 12px 26px rgba(42, 24, 13, .20);
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 84px;
+      background: #f2f1f6;
+    }
+
+    .capture {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
+    }
+
+    .placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 120px;
+      text-align: center;
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.96), rgba(244,239,232,.98)),
+        repeating-linear-gradient(45deg, transparent 0 24px, rgba(240,100,50,.08) 24px 48px);
+    }
+
+    .placeholder strong {
+      display: block;
+      margin-bottom: 24px;
+      color: var(--ember);
+      font-size: 55px;
+      line-height: 1.35;
+    }
+
+    .placeholder span {
+      display: block;
+      color: var(--muted);
+      font-size: 34px;
+      line-height: 1.55;
+      white-space: pre-line;
+    }
+
+    .safe-zone {
+      position: absolute;
+      inset: 0;
+      border: 4px dashed rgba(240, 100, 50, .35);
+      border-radius: 82px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <main class="artboard">
+    <div class="brand">
+      <img src="../../SumibiApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png" alt="">
+      <span>Sumibi</span>
+    </div>
+    <div class="number" id="number"></div>
+    <section class="copy">
+      <h1 id="headline"></h1>
+      <p class="supporting" id="supporting"></p>
+    </section>
+    <section class="phone" aria-label="iPhone画面の差し替え領域">
+      <div class="screen">
+        <img class="capture" id="capture" alt="">
+        <div class="placeholder" id="placeholder">
+          <div>
+            <strong id="placeholder-title"></strong>
+            <span id="placeholder-detail"></span>
+          </div>
+        </div>
+        <div class="safe-zone"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const slides = [
+      {
+        headline: 'ローマ字の文章を、\n<span class="accent">自然な日本語</span>へ',
+        supporting: '入力して「変換」を押すだけ。\n文章全体をAIが整えます。',
+        capture: 'captures/01-natural-japanese.png',
+        placeholderTitle: '変換結果を撮影',
+        placeholderDetail: 'メモアプリ + Sumibiキーボード\n自然な日本語への変換後を表示'
+      },
+      {
+        headline: '<span class="accent">英字QWERTY</span>の\n1画面で入力',
+        supporting: 'かな入力用キーボードへの\n切り替えは不要です。',
+        capture: 'captures/02-qwerty-input.png',
+        placeholderTitle: '入力途中を撮影',
+        placeholderDetail: '数字段・英字キー・変換キーを表示\nsumibi yakiniku ga sukidesu .'
+      },
+      {
+        headline: '候補から、\n<span class="accent">好みの表現</span>を選択',
+        supporting: '言い回しを選び直したり、\nUndoで原文へ戻したりできます。',
+        capture: 'captures/03-candidates.png',
+        placeholderTitle: '候補バーを撮影',
+        placeholderDetail: '複数候補と「↶ Undo」が\n同時に見える状態を使用'
+      },
+      {
+        headline: '記号一覧も、\n<span class="accent">ワンタップ</span>で',
+        supporting: 'よく使う記号を3段で表示。\n入力中もキーボードを切り替えません。',
+        capture: 'captures/06-symbol-panel.png',
+        placeholderTitle: '記号一覧を撮影',
+        placeholderDetail: '「記号」をタップしてパネルを展開\n記号3段とQWERTYを同時に表示'
+      },
+      {
+        headline: '固有名詞を\n<span class="accent">ユーザー辞書</span>に登録',
+        supporting: '製品名などの表記を、\n指定した形で候補へ反映します。',
+        capture: 'captures/04-user-dictionary.png',
+        placeholderTitle: 'ユーザー辞書を撮影',
+        placeholderDetail: 'sumibi = Sumibi\nopenai = OpenAI'
+      },
+      {
+        headline: '送信先を確認してから\n<span class="accent">AI変換</span>',
+        supporting: '明示的に同意した場合だけ、\n変換に必要なデータを送信します。',
+        capture: 'captures/05-privacy-consent.png',
+        placeholderTitle: 'プライバシー欄を撮影',
+        placeholderDetail: '送信先・同意スイッチ・\n送信内容の説明を表示'
+      }
+    ];
+
+    const requested = Number(new URLSearchParams(location.search).get('slide') || '1');
+    const index = Math.min(Math.max(requested, 1), slides.length) - 1;
+    const slide = slides[index];
+    document.getElementById('number').textContent = String(index + 1).padStart(2, '0') + ' / 06';
+    document.getElementById('headline').innerHTML = slide.headline;
+    document.getElementById('supporting').textContent = slide.supporting;
+    document.getElementById('placeholder-title').textContent = slide.placeholderTitle;
+    document.getElementById('placeholder-detail').textContent = slide.placeholderDetail;
+
+    const capture = document.getElementById('capture');
+    const placeholder = document.getElementById('placeholder');
+    capture.addEventListener('load', () => { placeholder.style.display = 'none'; });
+    capture.addEventListener('error', () => { capture.style.display = 'none'; });
+    capture.src = slide.capture;
+  </script>
+</body>
+</html>
