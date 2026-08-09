@@ -12,6 +12,12 @@ struct SumibiApp: App {
 }
 
 private struct ContentView: View {
+    private enum APIField: Hashable {
+        case endpoint
+        case model
+        case apiKey
+    }
+
     @State private var endpoint = ProviderConfiguration.defaultEndpoint
     @State private var model = ProviderConfiguration.defaultModel
     @State private var apiKey = ""
@@ -25,6 +31,7 @@ private struct ContentView: View {
     @State private var keyClickSoundEnabled = true
     @State private var userDictionary = ""
     @State private var hasAIDataSharingConsent = false
+    @FocusState private var focusedAPIField: APIField?
 
     var body: some View {
         NavigationStack {
@@ -67,10 +74,12 @@ private struct ContentView: View {
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .focused($focusedAPIField, equals: .endpoint)
 
             TextField("モデル名", text: $model)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .focused($focusedAPIField, equals: .model)
 
             SecureField(
                 hasStoredAPIKey ? "APIキー（保存済み）" : "APIキー",
@@ -78,6 +87,7 @@ private struct ContentView: View {
             )
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
+            .focused($focusedAPIField, equals: .apiKey)
 
             LabeledContent("保存済みAPIキー") {
                 Text(storedAPIKeyDisplay ?? "未設定")
@@ -86,6 +96,7 @@ private struct ContentView: View {
             }
 
             Button("設定を保存") {
+                focusedAPIField = nil
                 saveSettings()
             }
 
