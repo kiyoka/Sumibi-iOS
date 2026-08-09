@@ -21,6 +21,9 @@ private struct ContentView: View {
     @State private var endpoint = ProviderConfiguration.defaultEndpoint
     @State private var model = ProviderConfiguration.defaultModel
     @State private var apiKey = ""
+    @State private var savedEndpoint = ""
+    @State private var savedModel = ""
+    @State private var hasLoadedSettings = false
     @State private var hasStoredAPIKey = false
     @State private var storedAPIKeyDisplay: String?
     @State private var statusMessage = ""
@@ -31,6 +34,7 @@ private struct ContentView: View {
     @State private var keyClickSoundEnabled = true
     @State private var userDictionary = ""
     @State private var hasAIDataSharingConsent = false
+    @State private var isShowingAPIKeyDeletionConfirmation = false
     @FocusState private var focusedAPIField: APIField?
 
     var body: some View {
@@ -45,6 +49,17 @@ private struct ContentView: View {
                 privacySection
             }
             .navigationTitle("Sumibi")
+            .alert(
+                "保存したAPIキーを削除しますか？",
+                isPresented: $isShowingAPIKeyDeletionConfirmation
+            ) {
+                Button("キャンセル", role: .cancel) {}
+                Button("削除", role: .destructive) {
+                    deleteAPIKey()
+                }
+            } message: {
+                Text("削除すると元に戻せません。再度利用するにはAPIキーの入力が必要です。")
+            }
             .task {
                 loadSettings()
             }
@@ -99,10 +114,11 @@ private struct ContentView: View {
                 focusedAPIField = nil
                 saveSettings()
             }
+            .disabled(!hasUnsavedAPISettings)
 
             if hasStoredAPIKey {
                 Button("保存したAPIキーを削除", role: .destructive) {
-                    deleteAPIKey()
+                    isShowingAPIKeyDeletionConfirmation = true
                 }
             }
 
@@ -246,6 +262,15 @@ private struct ContentView: View {
         return normalized.isEmpty ? "未設定" : normalized
     }
 
+    private var hasUnsavedAPISettings: Bool {
+        guard hasLoadedSettings else {
+            return false
+        }
+        return endpoint.trimmingCharacters(in: .whitespacesAndNewlines) != savedEndpoint
+            || model.trimmingCharacters(in: .whitespacesAndNewlines) != savedModel
+            || !apiKey.isEmpty
+    }
+
     private func updateAIDataSharingConsent(_ isEnabled: Bool) {
         guard let store = SharedSettingsStore() else {
             hasAIDataSharingConsent = false
@@ -285,6 +310,10 @@ private struct ContentView: View {
             let configuration = store.loadProviderConfiguration()
             endpoint = configuration.endpoint
             model = configuration.model
+            savedEndpoint = configuration.endpoint
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            savedModel = configuration.model
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
             userDictionary = store.loadUserDictionary()
@@ -298,6 +327,7 @@ private struct ContentView: View {
             hasStoredAPIKey = false
             storedAPIKeyDisplay = nil
         }
+        hasLoadedSettings = true
     }
 
     private func saveSettings() {
@@ -320,6 +350,8 @@ private struct ContentView: View {
                 hasStoredAPIKey = true
                 storedAPIKeyDisplay = maskedDisplay
             }
+            savedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+            savedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
             statusMessage = "設定を保存しました。"
         } catch {
             statusMessage = "設定を保存できませんでした。"
