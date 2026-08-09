@@ -13,6 +13,19 @@ public struct APIKeyStore {
 
     public init() {}
 
+    public static func maskedDisplay(for apiKey: String) -> String? {
+        guard !apiKey.isEmpty else {
+            return nil
+        }
+        guard apiKey.count > 4 else {
+            return String(repeating: "•", count: apiKey.count)
+        }
+
+        let suffix = apiKey.suffix(4)
+        let maskedPrefix = String(repeating: "•", count: apiKey.count - suffix.count)
+        return maskedPrefix + suffix
+    }
+
     public func load() throws -> String? {
         var query = baseQuery
         query[kSecReturnData as String] = true

@@ -16,6 +16,7 @@ private struct ContentView: View {
     @State private var model = ProviderConfiguration.defaultModel
     @State private var apiKey = ""
     @State private var hasStoredAPIKey = false
+    @State private var storedAPIKeyDisplay: String?
     @State private var statusMessage = ""
     @State private var testSource = "sumibi yakiniku ga sukidesu ."
     @State private var testResult = ""
@@ -77,6 +78,12 @@ private struct ContentView: View {
             )
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
+
+            LabeledContent("保存済みAPIキー") {
+                Text(storedAPIKeyDisplay ?? "未設定")
+                    .monospaced()
+                    .privacySensitive()
+            }
 
             Button("設定を保存") {
                 saveSettings()
@@ -273,9 +280,12 @@ private struct ContentView: View {
             hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)
         }
         do {
-            hasStoredAPIKey = try APIKeyStore().load() != nil
+            let storedAPIKey = try APIKeyStore().load()
+            hasStoredAPIKey = storedAPIKey != nil
+            storedAPIKeyDisplay = storedAPIKey.flatMap(APIKeyStore.maskedDisplay)
         } catch {
             hasStoredAPIKey = false
+            storedAPIKeyDisplay = nil
         }
     }
 
@@ -293,9 +303,11 @@ private struct ContentView: View {
                 )
             )
             if !apiKey.isEmpty {
+                let maskedDisplay = APIKeyStore.maskedDisplay(for: apiKey)
                 try APIKeyStore().save(apiKey)
                 apiKey = ""
                 hasStoredAPIKey = true
+                storedAPIKeyDisplay = maskedDisplay
             }
             statusMessage = "設定を保存しました。"
         } catch {
@@ -308,6 +320,7 @@ private struct ContentView: View {
             try APIKeyStore().delete()
             apiKey = ""
             hasStoredAPIKey = false
+            storedAPIKeyDisplay = nil
             statusMessage = "APIキーを削除しました。"
         } catch {
             statusMessage = "APIキーを削除できませんでした。"
