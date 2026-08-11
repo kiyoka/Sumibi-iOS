@@ -24,9 +24,37 @@ public struct ConversionRequest: Equatable, Sendable {
 
 public struct ConversionResponse: Equatable, Sendable {
     public let candidates: [String]
+    public let model: String?
+    public let usage: TokenUsage?
 
-    public init(candidates: [String]) {
+    public init(
+        candidates: [String],
+        model: String? = nil,
+        usage: TokenUsage? = nil
+    ) {
         self.candidates = candidates
+        self.model = model
+        self.usage = usage
+    }
+}
+
+public struct TokenUsage: Equatable, Sendable {
+    public let inputTokens: Int
+    public let cachedInputTokens: Int
+    public let outputTokens: Int
+
+    public init(
+        inputTokens: Int,
+        cachedInputTokens: Int = 0,
+        outputTokens: Int
+    ) {
+        self.inputTokens = inputTokens
+        self.cachedInputTokens = cachedInputTokens
+        self.outputTokens = outputTokens
+    }
+
+    public var totalTokens: Int {
+        inputTokens + outputTokens
     }
 }
 

@@ -42,6 +42,28 @@ public struct OpenAICompatibleClient: ConversionClient {
 
     private struct ChatResponse: Decodable {
         let choices: [Choice]
+        let model: String?
+        let usage: Usage?
+    }
+
+    private struct Usage: Decodable {
+        let promptTokens: Int
+        let completionTokens: Int
+        let promptTokensDetails: PromptTokensDetails?
+
+        private enum CodingKeys: String, CodingKey {
+            case promptTokens = "prompt_tokens"
+            case completionTokens = "completion_tokens"
+            case promptTokensDetails = "prompt_tokens_details"
+        }
+    }
+
+    private struct PromptTokensDetails: Decodable {
+        let cachedTokens: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case cachedTokens = "cached_tokens"
+        }
     }
 
     private struct Choice: Decodable {
@@ -130,7 +152,18 @@ public struct OpenAICompatibleClient: ConversionClient {
         guard !candidates.isEmpty else {
             throw OpenAICompatibleClientError.emptyResponse
         }
-        return ConversionResponse(candidates: Array(candidates))
+        let usage = chatResponse.usage.map {
+            TokenUsage(
+                inputTokens: $0.promptTokens,
+                cachedInputTokens: $0.promptTokensDetails?.cachedTokens ?? 0,
+                outputTokens: $0.completionTokens
+            )
+        }
+        return ConversionResponse(
+            candidates: Array(candidates),
+            model: chatResponse.model ?? configuration.model,
+            usage: usage
+        )
     }
 
     private func userDictionaryInstructions(for request: ConversionRequest) -> String {

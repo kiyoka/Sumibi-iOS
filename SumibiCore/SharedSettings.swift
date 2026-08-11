@@ -25,6 +25,7 @@ public struct SharedSettingsStore {
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
         static let userDictionary = "userDictionary"
         static let aiDataSharingConsentEndpoint = "aiDataSharingConsentEndpoint"
+        static let usageStatistics = "usageStatistics"
     }
 
     private let defaults: UserDefaults
@@ -120,5 +121,116 @@ public struct SharedSettingsStore {
 
     public func revokeAIDataSharingConsent() {
         defaults.removeObject(forKey: Key.aiDataSharingConsentEndpoint)
+    }
+
+    public func loadUsageStatistics() -> [ModelUsageStatistics] {
+        guard
+            let data = defaults.data(forKey: Key.usageStatistics),
+            let statistics = try? decoder.decode([ModelUsageStatistics].self, from: data)
+        else {
+            return []
+        }
+        return statistics.sorted { $0.model.localizedStandardCompare($1.model) == .orderedAscending }
+    }
+
+    public func recordUsage(_ usage: TokenUsage, model: String) {
+        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedModel.isEmpty else {
+            return
+        }
+        var statistics = loadUsageStatistics()
+        if let index = statistics.firstIndex(where: { $0.model == normalizedModel }) {
+            if statistics[index].collectionStartedAt == nil {
+                statistics[index].collectionStartedAt = Date()
+            }
+            statistics[index].conversionCount += 1
+            statistics[index].inputTokens += usage.inputTokens
+            statistics[index].cachedInputTokens += usage.cachedInputTokens
+            statistics[index].outputTokens += usage.outputTokens
+        } else {
+            statistics.append(
+                ModelUsageStatistics(
+                    model: normalizedModel,
+                    conversionCount: 1,
+                    inputTokens: usage.inputTokens,
+                    cachedInputTokens: usage.cachedInputTokens,
+                    outputTokens: usage.outputTokens,
+                    collectionStartedAt: Date()
+                )
+            )
+        }
+        if let data = try? encoder.encode(statistics) {
+            defaults.set(data, forKey: Key.usageStatistics)
+        }
+    }
+
+    public func resetUsageStatistics() {
+        let reset = loadUsageStatistics().map {
+            ModelUsageStatistics(model: $0.model, collectionStartedAt: Date())
+        }
+        if let data = try? encoder.encode(reset) {
+            defaults.set(data, forKey: Key.usageStatistics)
+        }
+    }
+}
+
+public struct ModelUsageStatistics: Codable, Equatable, Identifiable, Sendable {
+    public var id: String { model }
+
+    public let model: String
+    public var conversionCount: Int
+    public var inputTokens: Int
+    public var cachedInputTokens: Int
+    public var outputTokens: Int
+    public var collectionStartedAt: Date?
+
+    public init(
+        model: String,
+        conversionCount: Int = 0,
+        inputTokens: Int = 0,
+        cachedInputTokens: Int = 0,
+        outputTokens: Int = 0,
+        collectionStartedAt: Date? = nil
+    ) {
+        self.model = model
+        self.conversionCount = conversionCount
+        self.inputTokens = inputTokens
+        self.cachedInputTokens = cachedInputTokens
+        self.outputTokens = outputTokens
+        self.collectionStartedAt = collectionStartedAt
+    }
+
+    public var totalTokens: Int {
+        inputTokens + outputTokens
+    }
+
+    public var estimatedCostUSD: Decimal? {
+        guard let pricing = ModelPricing.pricing(for: model) else {
+            return nil
+        }
+        let cached = min(cachedInputTokens, inputTokens)
+        let uncached = inputTokens - cached
+        return (
+            Decimal(uncached) * pricing.input
+                + Decimal(cached) * pricing.cachedInput
+                + Decimal(outputTokens) * pricing.output
+        ) / 1_000_000
+    }
+}
+
+private struct ModelPricing {
+    let input: Decimal
+    let cachedInput: Decimal
+    let output: Decimal
+
+    static func pricing(for model: String) -> ModelPricing? {
+        let normalized = model.lowercased()
+        if normalized == "gpt-5.6-sol" || normalized.hasPrefix("gpt-5.6-sol-") {
+            return ModelPricing(input: 5, cachedInput: 0.5, output: 30)
+        }
+        if normalized == "gpt-5.6-terra" || normalized.hasPrefix("gpt-5.6-terra-") {
+            return ModelPricing(input: 2, cachedInput: 0.2, output: 12)
+        }
+        return nil
     }
 }

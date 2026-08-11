@@ -12,6 +12,8 @@ struct SumibiApp: App {
 }
 
 private struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     private enum APIField: Hashable {
         case endpoint
         case model
@@ -35,6 +37,8 @@ private struct ContentView: View {
     @State private var userDictionary = ""
     @State private var hasAIDataSharingConsent = false
     @State private var isShowingAPIKeyDeletionConfirmation = false
+    @State private var usageStatistics: [ModelUsageStatistics] = []
+    @State private var isShowingUsageResetConfirmation = false
     @FocusState private var focusedAPIField: APIField?
 
     var body: some View {
@@ -45,6 +49,7 @@ private struct ContentView: View {
                 keyboardBehaviorSection
                 userDictionarySection
                 conversionTestSection
+                usageSection
                 keyboardSetupSection
                 privacySection
             }
@@ -62,6 +67,12 @@ private struct ContentView: View {
             }
             .task {
                 loadSettings()
+                loadUsageStatistics()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    loadUsageStatistics()
+                }
             }
             .onChange(of: endpoint) { _, newEndpoint in
                 hasAIDataSharingConsent = SharedSettingsStore()?
@@ -69,6 +80,18 @@ private struct ContentView: View {
             }
             .onChange(of: hasAIDataSharingConsent) { _, isEnabled in
                 updateAIDataSharingConsent(isEnabled)
+            }
+            .alert(
+                "利用状況をリセットしますか？",
+                isPresented: $isShowingUsageResetConfirmation
+            ) {
+                Button("キャンセル", role: .cancel) {}
+                Button("リセット", role: .destructive) {
+                    SharedSettingsStore()?.resetUsageStatistics()
+                    loadUsageStatistics()
+                }
+            } message: {
+                Text("モデルごとのトークン数、概算料金、変換回数を0に戻します。")
             }
         }
     }
@@ -166,6 +189,73 @@ private struct ContentView: View {
         } footer: {
             Text("テスト時も入力内容を設定済みAPIへ送信します。")
         }
+    }
+
+    private var usageSection: some View {
+        Section {
+            if usageStatistics.isEmpty {
+                Text("利用履歴はありません。")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(usageStatistics) { statistics in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(statistics.model)
+                                .font(.headline)
+                                .textSelection(.enabled)
+                            Spacer()
+                            if let startedAt = statistics.collectionStartedAt {
+                                Text(
+                                    "集計開始 \(startedAt.formatted(date: .numeric, time: .shortened))"
+                                )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        VStack(spacing: 8) {
+                            LabeledContent("変換回数", value: "\(statistics.conversionCount)回")
+                            LabeledContent("入力トークン", value: statistics.inputTokens.formatted())
+                            if statistics.cachedInputTokens > 0 {
+                                LabeledContent(
+                                    "うちキャッシュ入力",
+                                    value: statistics.cachedInputTokens.formatted()
+                                )
+                            }
+                            LabeledContent("出力トークン", value: statistics.outputTokens.formatted())
+                            LabeledContent("合計トークン", value: statistics.totalTokens.formatted())
+                            LabeledContent("概算料金") {
+                                Text(estimatedCostDisplay(for: statistics))
+                                    .monospacedDigit()
+                            }
+                        }
+                        .padding(.leading, 16)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Button("利用状況をリセット", role: .destructive) {
+                    isShowingUsageResetConfirmation = true
+                }
+            }
+        } header: {
+            Text("利用状況")
+        } footer: {
+            Text("APIレスポンスのトークン数を端末内に記録します。料金はOpenAIのStandard料金（短いコンテキスト）による概算です。料金表にないモデルは不明と表示します。")
+        }
+    }
+
+    private func estimatedCostDisplay(for statistics: ModelUsageStatistics) -> String {
+        guard let cost = statistics.estimatedCostUSD else {
+            return "不明"
+        }
+        return cost.formatted(
+            .currency(code: "USD")
+                .precision(.fractionLength(6))
+        )
+    }
+
+    private func loadUsageStatistics() {
+        usageStatistics = SharedSettingsStore()?.loadUsageStatistics() ?? []
     }
 
     private var userDictionarySection: some View {
@@ -403,6 +493,13 @@ private struct ContentView: View {
                     userDictionary: userDictionary
                 )
             )
+            if let usage = response.usage {
+                SharedSettingsStore()?.recordUsage(
+                    usage,
+                    model: response.model ?? normalizedModel
+                )
+                loadUsageStatistics()
+            }
             testResult = response.candidates.first ?? "候補がありません。"
         } catch let error as OpenAICompatibleClientError {
             testResult = message(for: error)
