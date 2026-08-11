@@ -799,6 +799,7 @@ final class KeyboardViewController: UIInputViewController {
         guard activeRequestID == requestID else {
             return
         }
+        recordUsage(from: response)
         activeRequestID = nil
         conversionTask = nil
 
@@ -871,6 +872,16 @@ final class KeyboardViewController: UIInputViewController {
         retrySnapshot = presentation.retryable ? snapshot : nil
         showError(presentation.message, retryable: presentation.retryable)
         refreshConvertButton()
+    }
+
+    private func recordUsage(from response: ConversionResponse) {
+        guard let usage = response.usage else {
+            return
+        }
+        let model = response.model
+            ?? sharedSettings?.loadProviderConfiguration().model
+            ?? ProviderConfiguration.defaultModel
+        sharedSettings?.recordUsage(usage, model: model)
     }
 
     private func errorPresentation(for error: Error) -> (message: String, retryable: Bool) {
@@ -1167,6 +1178,7 @@ final class KeyboardViewController: UIInputViewController {
         guard activeRequestID == requestID else {
             return
         }
+        recordUsage(from: response)
         activeRequestID = nil
         conversionTask = nil
 
