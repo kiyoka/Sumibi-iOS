@@ -669,9 +669,15 @@ final class KeyboardViewController: UIInputViewController {
         configuration.cornerStyle = .capsule
 
         let button = UIButton(configuration: configuration)
+        configureCandidateButtonSizing(button)
         button.accessibilityLabel = accessibilityLabel
         button.addTarget(self, action: action, for: .touchUpInside)
         candidateStack.addArrangedSubview(button)
+    }
+
+    private func configureCandidateButtonSizing(_ button: UIButton) {
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
 
     private func showConverting() {
@@ -729,6 +735,7 @@ final class KeyboardViewController: UIInputViewController {
             configuration.cornerStyle = .capsule
 
             let button = UIButton(configuration: configuration)
+            configureCandidateButtonSizing(button)
             button.tag = index
             button.accessibilityLabel = option == session.original
                 ? "原文、\(option)"
