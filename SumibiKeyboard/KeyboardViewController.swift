@@ -30,6 +30,13 @@ final class KeyboardViewController: UIInputViewController {
         var replacement: String
     }
 
+    private struct SelectedTextSnapshot {
+        let source: String
+        let contextBefore: String
+        let contextAfter: String
+        let documentIdentifier: UUID
+    }
+
     private lazy var sharedSettings = SharedSettingsStore()
     private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
     private let candidateStack = UIStackView()
@@ -39,10 +46,16 @@ final class KeyboardViewController: UIInputViewController {
     private var candidateSession: CandidateSession?
     private var undoRecord: UndoRecord?
     private var retrySnapshot: ConversionSnapshot?
+    private var retrySelectedTextSnapshot: SelectedTextSnapshot?
     private var additionalCandidateErrorMessage: String?
     private var conversionTask: Task<Void, Never>?
     private var activeRequestID: UUID?
     private var convertButton: UIButton?
+    private var normalSpaceWidthConstraint: NSLayoutConstraint?
+    private var selectedSpaceWidthConstraint: NSLayoutConstraint?
+    private var normalConvertWidthConstraint: NSLayoutConstraint?
+    private var selectedConvertWidthConstraint: NSLayoutConstraint?
+    private var isShowingSelectedTextControls = false
     private var keyRowsStack: UIStackView?
     private var candidateBarHeightConstraint: NSLayoutConstraint?
     private var candidateBarBottomSpacingConstraint: NSLayoutConstraint?
@@ -88,7 +101,18 @@ final class KeyboardViewController: UIInputViewController {
         candidateSession = nil
         undoRecord = nil
         retrySnapshot = nil
+        retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
+        refreshConvertButton()
+    }
+
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        refreshConvertButton()
+    }
+
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
         refreshConvertButton()
     }
 
@@ -310,10 +334,7 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         cancelConversionForEditing()
-        guard compositionTracker.startComposition(
-            with: text,
-            respectsSlashBoundary: false
-        ) else {
+        guard compositionTracker.startComposition(with: text) else {
             showCandidateMessage("クリップボードは512文字以内にしてください")
             refreshConvertButton()
             return
@@ -419,7 +440,6 @@ final class KeyboardViewController: UIInputViewController {
             action: #selector(returnTapped)
         )
         self.convertButton = convertButton
-        refreshConvertButton()
 
         let nextKeyboardButton = makeSpecialButton(
             title: "",
@@ -433,17 +453,30 @@ final class KeyboardViewController: UIInputViewController {
         let row = makeRow(buttons)
         row.distribution = .fill
         nextKeyboardButton.widthAnchor.constraint(
-            equalTo: convertButton.widthAnchor
+            equalTo: returnButton.widthAnchor
         ).isActive = true
         symbolButton.widthAnchor.constraint(
-            equalTo: convertButton.widthAnchor,
+            equalTo: returnButton.widthAnchor,
             multiplier: 1.35
         ).isActive = true
-        spaceButton.widthAnchor.constraint(
-            equalTo: convertButton.widthAnchor,
+        normalSpaceWidthConstraint = spaceButton.widthAnchor.constraint(
+            equalTo: returnButton.widthAnchor,
             multiplier: 2.65
-        ).isActive = true
-        returnButton.widthAnchor.constraint(equalTo: convertButton.widthAnchor).isActive = true
+        )
+        selectedSpaceWidthConstraint = spaceButton.widthAnchor.constraint(
+            equalTo: returnButton.widthAnchor,
+            multiplier: 2.20
+        )
+        normalConvertWidthConstraint = convertButton.widthAnchor.constraint(
+            equalTo: returnButton.widthAnchor
+        )
+        selectedConvertWidthConstraint = convertButton.widthAnchor.constraint(
+            equalTo: returnButton.widthAnchor,
+            multiplier: 1.45
+        )
+        normalSpaceWidthConstraint?.isActive = true
+        normalConvertWidthConstraint?.isActive = true
+        refreshConvertButton()
         return row
     }
 
@@ -754,6 +787,7 @@ final class KeyboardViewController: UIInputViewController {
         candidateSession = nil
         undoRecord = nil
         retrySnapshot = nil
+        retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
         showCandidateMessage("入力中")
     }
@@ -774,13 +808,38 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshConvertButton() {
+        let selectedText = textDocumentProxy.selectedText ?? ""
+        let hasSelectedText = !selectedText.isEmpty
         let snapshot = compositionTracker.snapshot()
-        let isEnabled = snapshot != nil && activeRequestID == nil
+        let selectionIsValid = hasSelectedText && selectedText.count <= 512
+        let isEnabled = (selectionIsValid || snapshot != nil) && activeRequestID == nil
+        updateSelectedTextControls(isSelected: hasSelectedText)
         convertButton?.isEnabled = isEnabled
         convertButton?.alpha = isEnabled ? 1 : 0.45
-        convertButton?.accessibilityValue = isEnabled
-            ? "変換対象\(snapshot?.source.count ?? 0)文字"
-            : "変換対象なし"
+        if hasSelectedText {
+            convertButton?.accessibilityValue = selectionIsValid
+                ? "選択中の\(selectedText.count)文字を変換"
+                : "選択範囲は512文字以内にしてください"
+        } else {
+            convertButton?.accessibilityValue = isEnabled
+                ? "変換対象\(snapshot?.source.count ?? 0)文字"
+                : "変換対象なし"
+        }
+    }
+
+    private func updateSelectedTextControls(isSelected: Bool) {
+        guard isShowingSelectedTextControls != isSelected else {
+            return
+        }
+        isShowingSelectedTextControls = isSelected
+        normalSpaceWidthConstraint?.isActive = !isSelected
+        normalConvertWidthConstraint?.isActive = !isSelected
+        selectedSpaceWidthConstraint?.isActive = isSelected
+        selectedConvertWidthConstraint?.isActive = isSelected
+        convertButton?.configuration?.title = isSelected ? "範囲を変換" : "変換"
+        convertButton?.configuration?.baseBackgroundColor = isSelected ? .systemBlue : .systemGray3
+        convertButton?.configuration?.baseForegroundColor = isSelected ? .white : .label
+        convertButton?.accessibilityLabel = isSelected ? "範囲を変換" : "変換"
     }
 
     private func replaceHostText(_ current: String, with replacement: String) {
@@ -1062,6 +1121,16 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func convertTapped() {
+        if let selectedSnapshot = selectedTextSnapshot() {
+            guard selectedSnapshot.source.count <= 512 else {
+                showCandidateMessage("選択範囲は512文字以内にしてください")
+                refreshConvertButton()
+                return
+            }
+            startSelectedTextConversion(selectedSnapshot)
+            return
+        }
+
         guard
             compositionTracker.matches(
                 documentContextBeforeInput: textDocumentProxy.documentContextBeforeInput
@@ -1077,9 +1146,141 @@ final class KeyboardViewController: UIInputViewController {
         startConversion(snapshot)
     }
 
+    private func selectedTextSnapshot() -> SelectedTextSnapshot? {
+        guard let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty else {
+            return nil
+        }
+        return SelectedTextSnapshot(
+            source: selectedText,
+            contextBefore: textDocumentProxy.documentContextBeforeInput ?? "",
+            contextAfter: textDocumentProxy.documentContextAfterInput ?? "",
+            documentIdentifier: textDocumentProxy.documentIdentifier
+        )
+    }
+
+    private func selectedTextMatches(_ snapshot: SelectedTextSnapshot) -> Bool {
+        textDocumentProxy.documentIdentifier == snapshot.documentIdentifier
+            && textDocumentProxy.selectedText == snapshot.source
+            && (textDocumentProxy.documentContextBeforeInput ?? "") == snapshot.contextBefore
+            && (textDocumentProxy.documentContextAfterInput ?? "") == snapshot.contextAfter
+    }
+
+    private func startSelectedTextConversion(_ snapshot: SelectedTextSnapshot) {
+        pendingConversion = nil
+        retrySnapshot = nil
+        retrySelectedTextSnapshot = nil
+        additionalCandidateErrorMessage = nil
+        undoRecord = nil
+        guard let conversionClient = makeConversionClient() else {
+            refreshConvertButton()
+            return
+        }
+        let requestID = UUID()
+        activeRequestID = requestID
+        showConverting()
+        refreshConvertButton()
+
+        let request = ConversionRequest(
+            source: snapshot.source,
+            surroundingContext: snapshot.contextBefore,
+            userDictionary: sharedSettings?.loadUserDictionary() ?? ""
+        )
+        conversionTask = Task { [weak self, conversionClient] in
+            do {
+                let response = try await conversionClient.convert(request)
+                self?.finishSelectedTextConversion(
+                    response,
+                    snapshot: snapshot,
+                    requestID: requestID
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.failSelectedTextConversion(
+                    error,
+                    snapshot: snapshot,
+                    requestID: requestID
+                )
+            }
+        }
+    }
+
+    private func finishSelectedTextConversion(
+        _ response: ConversionResponse,
+        snapshot: SelectedTextSnapshot,
+        requestID: UUID
+    ) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        recordUsage(from: response)
+        activeRequestID = nil
+        conversionTask = nil
+
+        let candidates = Array(
+            response.candidates
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .reduce(into: [String]()) { unique, candidate in
+                    if !unique.contains(candidate) {
+                        unique.append(candidate)
+                    }
+                }
+                .prefix(ConversionCandidateMode.primary.candidateCount)
+        )
+        guard let firstCandidate = candidates.first else {
+            showCandidateMessage("変換候補がありません")
+            refreshConvertButton()
+            return
+        }
+        guard selectedTextMatches(snapshot) else {
+            showCandidateMessage("選択範囲が変更されたため置換しません")
+            refreshConvertButton()
+            return
+        }
+
+        textDocumentProxy.insertText(firstCandidate)
+        var options = candidates
+        if !options.contains(snapshot.source) {
+            options.append(snapshot.source)
+        }
+        candidateSession = CandidateSession(
+            original: snapshot.source,
+            undoOriginal: snapshot.source,
+            surroundingContext: snapshot.contextBefore,
+            options: options,
+            current: firstCandidate,
+            hasRequestedAdditionalCandidates: false
+        )
+        undoRecord = firstCandidate == snapshot.source
+            ? nil
+            : UndoRecord(original: snapshot.source, replacement: firstCandidate)
+        retrySelectedTextSnapshot = nil
+        compositionTracker.reset()
+        showCandidates()
+        refreshConvertButton()
+    }
+
+    private func failSelectedTextConversion(
+        _ error: Error,
+        snapshot: SelectedTextSnapshot,
+        requestID: UUID
+    ) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        activeRequestID = nil
+        conversionTask = nil
+        let presentation = errorPresentation(for: error)
+        retrySelectedTextSnapshot = presentation.retryable ? snapshot : nil
+        showError(presentation.message, retryable: presentation.retryable)
+        refreshConvertButton()
+    }
+
     private func startConversion(_ snapshot: ConversionSnapshot) {
         pendingConversion = snapshot
         retrySnapshot = nil
+        retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
         undoRecord = nil
         guard let conversionClient = makeConversionClient() else {
@@ -1249,11 +1450,21 @@ final class KeyboardViewController: UIInputViewController {
         activeRequestID = nil
         pendingConversion = nil
         retrySnapshot = nil
+        retrySelectedTextSnapshot = nil
         showCandidateMessage("変換をキャンセルしました")
         refreshConvertButton()
     }
 
     @objc private func retryTapped() {
+        if let snapshot = retrySelectedTextSnapshot {
+            guard selectedTextMatches(snapshot) else {
+                retrySelectedTextSnapshot = nil
+                showCandidateMessage("選択範囲が変更されたため再試行できません")
+                return
+            }
+            startSelectedTextConversion(snapshot)
+            return
+        }
         guard
             let snapshot = retrySnapshot,
             compositionTracker.revision == snapshot.revision,
