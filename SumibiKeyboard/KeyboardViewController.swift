@@ -262,35 +262,12 @@ final class KeyboardViewController: UIInputViewController {
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        var clipboardConfiguration = UIButton.Configuration.gray()
-        clipboardConfiguration.title = "読込"
-        clipboardConfiguration.image = UIImage(systemName: "doc.on.clipboard")
-        clipboardConfiguration.imagePadding = 3
-        clipboardConfiguration.baseForegroundColor = .label
-        clipboardConfiguration.cornerStyle = .capsule
-        clipboardConfiguration.contentInsets = NSDirectionalEdgeInsets(
-            top: 4,
-            leading: 6,
-            bottom: 4,
-            trailing: 6
-        )
-        let clipboardButton = UIButton(configuration: clipboardConfiguration)
-        clipboardButton.accessibilityLabel = "クリップボードを読み込む"
-        clipboardButton.addTarget(
-            self,
-            action: #selector(clipboardTapped),
-            for: .touchUpInside
-        )
-        clipboardButton.addTarget(self, action: #selector(keyTouchDown), for: .touchDown)
-        clipboardButton.translatesAutoresizingMaskIntoConstraints = false
-
         candidateStack.axis = .horizontal
         candidateStack.spacing = 8
         candidateStack.alignment = .center
         candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(iconView)
-        container.addSubview(clipboardButton)
         container.addSubview(scrollView)
         scrollView.addSubview(candidateStack)
         NSLayoutConstraint.activate([
@@ -298,12 +275,8 @@ final class KeyboardViewController: UIInputViewController {
             iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             iconView.widthAnchor.constraint(equalToConstant: 28),
             iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
-            clipboardButton.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
-            clipboardButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            clipboardButton.widthAnchor.constraint(equalToConstant: 82),
-            clipboardButton.heightAnchor.constraint(equalToConstant: 32),
             scrollView.topAnchor.constraint(equalTo: container.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: clipboardButton.trailingAnchor, constant: 6),
+            scrollView.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             candidateStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
@@ -313,36 +286,6 @@ final class KeyboardViewController: UIInputViewController {
             candidateStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
         ])
         return container
-    }
-
-    @objc private func clipboardTapped() {
-        guard hasFullAccess else {
-            showCandidateMessage("クリップボードの読込にはフルアクセスが必要です")
-            return
-        }
-        guard let text = UIPasteboard.general.string else {
-            showCandidateMessage("クリップボードに文字列がありません")
-            return
-        }
-        insertClipboardText(text)
-    }
-
-    private func insertClipboardText(_ text: String) {
-        guard !text.isEmpty else {
-            showCandidateMessage("クリップボードが空です")
-            return
-        }
-
-        cancelConversionForEditing()
-        guard compositionTracker.startComposition(with: text) else {
-            showCandidateMessage("クリップボードは512文字以内にしてください")
-            refreshConvertButton()
-            return
-        }
-
-        textDocumentProxy.insertText(text)
-        showCandidateMessage("クリップボードから\(text.count)文字を読み込みました")
-        refreshConvertButton()
     }
 
     private func makeExpandedSymbolPanel() -> UIStackView {
