@@ -106,14 +106,7 @@ public struct OpenAICompatibleClient: ConversionClient {
                 messages: [
                     Message(
                         role: "system",
-                        content: """
-                        あなたはローマ字と英語を自然な日本語へ変換するIMEです。
-                        Markdown記法、URL、固有名詞は可能な限り維持してください。
-                        入力にない情報は追加しないでください。
-                        \(userDictionaryInstructions(for: request))
-                        \(candidateInstructions(for: request))
-                        JSON以外の説明やMarkdownのコードフェンスは返さないでください。
-                        """
+                        content: systemInstructions(for: request)
                     ),
                     Message(
                         role: "user",
@@ -166,6 +159,27 @@ public struct OpenAICompatibleClient: ConversionClient {
         )
     }
 
+    private func systemInstructions(for request: ConversionRequest) -> String {
+        let roleInstructions: String
+        switch request.purpose {
+        case .ime:
+            roleInstructions = "あなたはローマ字と英語を自然な日本語へ変換するIMEです。"
+        case .speechRefinement:
+            roleInstructions = """
+            あなたはiOS音声入力が認識した日本語を整える校正機能です。
+            発話内容にない情報を追加せず、誤認識と考えられる箇所、句読点、表記、ユーザー辞書の語句だけを必要最小限に修正してください。
+            """
+        }
+        return """
+        \(roleInstructions)
+        Markdown記法、URL、固有名詞は可能な限り維持してください。
+        入力にない情報は追加しないでください。
+        \(userDictionaryInstructions(for: request))
+        \(candidateInstructions(for: request))
+        JSON以外の説明やMarkdownのコードフェンスは返さないでください。
+        """
+    }
+
     private func userDictionaryInstructions(for request: ConversionRequest) -> String {
         guard !request.userDictionary.isEmpty else {
             return "ユーザー辞書は登録されていません。"
@@ -180,6 +194,11 @@ public struct OpenAICompatibleClient: ConversionClient {
     }
 
     private func candidateInstructions(for request: ConversionRequest) -> String {
+        if request.purpose == .speechRefinement {
+            return """
+            音声認識結果を必要最小限に整えた候補を1件だけ作り、{"candidates":["候補1"]}というJSONだけを返してください。
+            """
+        }
         if request.mode == .additional {
             return """
             内容と表記が重複しない7候補を必ず作り、{"candidates":["候補1","候補2","候補3","候補4","候補5","候補6","候補7"]}というJSONだけを返してください。

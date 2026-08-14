@@ -30,6 +30,13 @@ final class KeyboardViewController: UIInputViewController {
         var replacement: String
     }
 
+    private struct SpeechInputSnapshot {
+        let source: String
+        let surroundingContext: String
+        let expectedContextBeforeInput: String
+        let documentIdentifier: UUID
+    }
+
     private lazy var sharedSettings = SharedSettingsStore()
     private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
     private let candidateStack = UIStackView()
@@ -39,6 +46,8 @@ final class KeyboardViewController: UIInputViewController {
     private var candidateSession: CandidateSession?
     private var undoRecord: UndoRecord?
     private var retrySnapshot: ConversionSnapshot?
+    private var pendingSpeechInput: SpeechInputSnapshot?
+    private var retrySpeechInput: SpeechInputSnapshot?
     private var additionalCandidateErrorMessage: String?
     private var conversionTask: Task<Void, Never>?
     private var activeRequestID: UUID?
@@ -60,6 +69,10 @@ final class KeyboardViewController: UIInputViewController {
     private var isCollapsingSymbolPanel = false
     private var isSymbolPanelExpanded = false
     private var isShifted = false
+    private var observedDocumentIdentifier: UUID?
+    private var observedContextBeforeInput = ""
+    private var hasObservedDocumentContext = false
+    private var isPerformingLocalEdit = false
 
     override func loadView() {
         let keyboardInputView = AudioFeedbackInputView(
@@ -74,9 +87,16 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         _ = sharedSettings?.loadProviderConfiguration()
         configureKeyboard()
+        updateObservedDocumentContext()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        detectExternalInsertion()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
+        updateObservedDocumentContext()
         super.viewWillDisappear(animated)
         stopKeyRepeat()
         setSymbolPanelExpanded(false, animated: false)
@@ -90,6 +110,23 @@ final class KeyboardViewController: UIInputViewController {
         retrySnapshot = nil
         additionalCandidateErrorMessage = nil
         refreshConvertButton()
+    }
+
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        guard !isPerformingLocalEdit else {
+            return
+        }
+        detectExternalInsertion()
+    }
+
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        guard !isPerformingLocalEdit else {
+            return
+        }
+        invalidateSpeechInputIfNeeded()
+        updateObservedDocumentContext()
     }
 
     override func viewDidLayoutSubviews() {
@@ -319,7 +356,9 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        textDocumentProxy.insertText(text)
+        performLocalEdit {
+            textDocumentProxy.insertText(text)
+        }
         showCandidateMessage("クリップボードから\(text.count)文字を読み込みました")
         refreshConvertButton()
     }
@@ -746,6 +785,28 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    private func showSpeechInputOffer(_ snapshot: SpeechInputSnapshot) {
+        clearCandidateBar()
+        let displayedSource = snapshot.source.count > 60
+            ? "\(snapshot.source.prefix(60))…"
+            : snapshot.source
+        let label = UILabel()
+        label.text = "音声入力候補 〚\(displayedSource)〛"
+        label.textColor = .secondaryLabel
+        label.font = .systemFont(ofSize: 13)
+        candidateStack.addArrangedSubview(label)
+        addCandidateAction(
+            title: "音声入力を整える",
+            accessibilityLabel: "音声入力を整える",
+            action: #selector(refineSpeechInputTapped)
+        )
+        addCandidateAction(
+            title: "そのまま使う",
+            accessibilityLabel: "音声入力をそのまま使う",
+            action: #selector(keepSpeechInputTapped)
+        )
+    }
+
     private func cancelConversionForEditing() {
         conversionTask?.cancel()
         conversionTask = nil
@@ -754,6 +815,8 @@ final class KeyboardViewController: UIInputViewController {
         candidateSession = nil
         undoRecord = nil
         retrySnapshot = nil
+        pendingSpeechInput = nil
+        retrySpeechInput = nil
         additionalCandidateErrorMessage = nil
         showCandidateMessage("入力中")
     }
@@ -768,7 +831,9 @@ final class KeyboardViewController: UIInputViewController {
             compositionTracker.reset()
         }
 
-        textDocumentProxy.insertText(text)
+        performLocalEdit {
+            textDocumentProxy.insertText(text)
+        }
         compositionTracker.append(text)
         refreshConvertButton()
     }
@@ -784,10 +849,94 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func replaceHostText(_ current: String, with replacement: String) {
-        for _ in current {
-            textDocumentProxy.deleteBackward()
+        performLocalEdit {
+            for _ in current {
+                textDocumentProxy.deleteBackward()
+            }
+            textDocumentProxy.insertText(replacement)
         }
-        textDocumentProxy.insertText(replacement)
+    }
+
+    private func performLocalEdit(_ edit: () -> Void) {
+        isPerformingLocalEdit = true
+        edit()
+        updateObservedDocumentContext()
+        isPerformingLocalEdit = false
+    }
+
+    private func updateObservedDocumentContext() {
+        observedDocumentIdentifier = textDocumentProxy.documentIdentifier
+        observedContextBeforeInput = textDocumentProxy.documentContextBeforeInput ?? ""
+        hasObservedDocumentContext = true
+    }
+
+    private func detectExternalInsertion() {
+        let documentIdentifier = textDocumentProxy.documentIdentifier
+        let currentContext = textDocumentProxy.documentContextBeforeInput ?? ""
+        defer {
+            observedDocumentIdentifier = documentIdentifier
+            observedContextBeforeInput = currentContext
+            hasObservedDocumentContext = true
+        }
+        guard
+            hasObservedDocumentContext,
+            observedDocumentIdentifier == documentIdentifier,
+            let insertedText = externallyInsertedSuffix(
+                previousContext: observedContextBeforeInput,
+                currentContext: currentContext
+            )
+        else {
+            invalidateSpeechInputIfNeeded()
+            return
+        }
+        guard !insertedText.isEmpty, insertedText.count <= 512 else {
+            invalidateSpeechInputIfNeeded()
+            return
+        }
+        let snapshot = SpeechInputSnapshot(
+            source: insertedText,
+            surroundingContext: String(currentContext.dropLast(insertedText.count)),
+            expectedContextBeforeInput: currentContext,
+            documentIdentifier: documentIdentifier
+        )
+        compositionTracker.reset()
+        pendingSpeechInput = snapshot
+        retrySpeechInput = nil
+        showSpeechInputOffer(snapshot)
+        refreshConvertButton()
+    }
+
+    private func externallyInsertedSuffix(
+        previousContext: String,
+        currentContext: String
+    ) -> String? {
+        if currentContext.hasPrefix(previousContext) {
+            return String(currentContext.dropFirst(previousContext.count))
+        }
+        guard !previousContext.isEmpty else {
+            return currentContext
+        }
+        let maximumOverlap = min(previousContext.count, currentContext.count)
+        for overlapLength in stride(from: maximumOverlap, through: 1, by: -1) {
+            if previousContext.suffix(overlapLength) == currentContext.prefix(overlapLength) {
+                return String(currentContext.dropFirst(overlapLength))
+            }
+        }
+        return nil
+    }
+
+    private func speechInputMatches(_ snapshot: SpeechInputSnapshot) -> Bool {
+        textDocumentProxy.documentIdentifier == snapshot.documentIdentifier
+            && textDocumentProxy.documentContextBeforeInput == snapshot.expectedContextBeforeInput
+    }
+
+    private func invalidateSpeechInputIfNeeded() {
+        guard let snapshot = pendingSpeechInput, !speechInputMatches(snapshot) else {
+            return
+        }
+        pendingSpeechInput = nil
+        retrySpeechInput = nil
+        showCandidateMessage("音声入力候補が変更されました")
     }
 
     private func finishConversion(
@@ -1053,7 +1202,9 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             compositionTracker.reset()
         }
-        textDocumentProxy.deleteBackward()
+        performLocalEdit {
+            textDocumentProxy.deleteBackward()
+        }
         refreshConvertButton()
     }
 
@@ -1077,7 +1228,125 @@ final class KeyboardViewController: UIInputViewController {
         startConversion(snapshot)
     }
 
+    @objc private func keepSpeechInputTapped() {
+        pendingSpeechInput = nil
+        retrySpeechInput = nil
+        updateObservedDocumentContext()
+        showCandidateMessage("音声入力をそのまま使用します")
+        refreshConvertButton()
+    }
+
+    @objc private func refineSpeechInputTapped() {
+        guard let snapshot = pendingSpeechInput, speechInputMatches(snapshot) else {
+            pendingSpeechInput = nil
+            showCandidateMessage("音声入力候補が変更されたため変換しません")
+            return
+        }
+        startSpeechRefinement(snapshot)
+    }
+
+    private func startSpeechRefinement(_ snapshot: SpeechInputSnapshot) {
+        guard let conversionClient = makeConversionClient() else {
+            refreshConvertButton()
+            return
+        }
+        retrySpeechInput = nil
+        undoRecord = nil
+        additionalCandidateErrorMessage = nil
+        let requestID = UUID()
+        activeRequestID = requestID
+        showCandidateMessage("音声入力を整えています…", showsProgress: true)
+        addCandidateAction(
+            title: "キャンセル",
+            accessibilityLabel: "音声入力の補正をキャンセル",
+            action: #selector(cancelTapped)
+        )
+        refreshConvertButton()
+
+        let request = ConversionRequest(
+            source: snapshot.source,
+            surroundingContext: snapshot.surroundingContext,
+            userDictionary: sharedSettings?.loadUserDictionary() ?? "",
+            purpose: .speechRefinement
+        )
+        conversionTask = Task { [weak self, conversionClient] in
+            do {
+                let response = try await conversionClient.convert(request)
+                self?.finishSpeechRefinement(response, snapshot: snapshot, requestID: requestID)
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.failSpeechRefinement(error, snapshot: snapshot, requestID: requestID)
+            }
+        }
+    }
+
+    private func finishSpeechRefinement(
+        _ response: ConversionResponse,
+        snapshot: SpeechInputSnapshot,
+        requestID: UUID
+    ) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        recordUsage(from: response)
+        activeRequestID = nil
+        conversionTask = nil
+        guard
+            let replacement = response.candidates
+                .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+                .first(where: { !$0.isEmpty })
+        else {
+            showCandidateMessage("補正候補がありません")
+            refreshConvertButton()
+            return
+        }
+        guard speechInputMatches(snapshot) else {
+            pendingSpeechInput = nil
+            showCandidateMessage("音声入力候補が変更されたため置換しません")
+            refreshConvertButton()
+            return
+        }
+
+        replaceHostText(snapshot.source, with: replacement)
+        candidateSession = CandidateSession(
+            original: snapshot.source,
+            undoOriginal: snapshot.source,
+            surroundingContext: snapshot.surroundingContext,
+            options: replacement == snapshot.source
+                ? [snapshot.source]
+                : [replacement, snapshot.source],
+            current: replacement,
+            hasRequestedAdditionalCandidates: true
+        )
+        undoRecord = replacement == snapshot.source
+            ? nil
+            : UndoRecord(original: snapshot.source, replacement: replacement)
+        pendingSpeechInput = nil
+        retrySpeechInput = nil
+        showCandidates()
+        refreshConvertButton()
+    }
+
+    private func failSpeechRefinement(
+        _ error: Error,
+        snapshot: SpeechInputSnapshot,
+        requestID: UUID
+    ) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        activeRequestID = nil
+        conversionTask = nil
+        let presentation = errorPresentation(for: error)
+        retrySpeechInput = presentation.retryable ? snapshot : nil
+        showError(presentation.message, retryable: presentation.retryable)
+        refreshConvertButton()
+    }
+
     private func startConversion(_ snapshot: ConversionSnapshot) {
+        pendingSpeechInput = nil
+        retrySpeechInput = nil
         pendingConversion = snapshot
         retrySnapshot = nil
         additionalCandidateErrorMessage = nil
@@ -1244,16 +1513,32 @@ final class KeyboardViewController: UIInputViewController {
         guard activeRequestID != nil else {
             return
         }
+        let speechInput = pendingSpeechInput
         conversionTask?.cancel()
         conversionTask = nil
         activeRequestID = nil
         pendingConversion = nil
         retrySnapshot = nil
-        showCandidateMessage("変換をキャンセルしました")
+        retrySpeechInput = nil
+        if let speechInput, speechInputMatches(speechInput) {
+            showSpeechInputOffer(speechInput)
+        } else {
+            showCandidateMessage("変換をキャンセルしました")
+        }
         refreshConvertButton()
     }
 
     @objc private func retryTapped() {
+        if let snapshot = retrySpeechInput {
+            guard speechInputMatches(snapshot) else {
+                retrySpeechInput = nil
+                pendingSpeechInput = nil
+                showCandidateMessage("音声入力候補が変更されたため再試行できません")
+                return
+            }
+            startSpeechRefinement(snapshot)
+            return
+        }
         guard
             let snapshot = retrySnapshot,
             compositionTracker.revision == snapshot.revision,
@@ -1326,7 +1611,9 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func returnTapped() {
         cancelConversionForEditing()
-        textDocumentProxy.insertText("\n")
+        performLocalEdit {
+            textDocumentProxy.insertText("\n")
+        }
         compositionTracker.reset()
         refreshConvertButton()
     }

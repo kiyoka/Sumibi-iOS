@@ -6,20 +6,28 @@ public struct ConversionRequest: Equatable, Sendable {
     public let mode: ConversionCandidateMode
     public let currentConversion: String?
     public let userDictionary: String
+    public let purpose: ConversionPurpose
 
     public init(
         source: String,
         surroundingContext: String = "",
         mode: ConversionCandidateMode = .primary,
         currentConversion: String? = nil,
-        userDictionary: String = ""
+        userDictionary: String = "",
+        purpose: ConversionPurpose = .ime
     ) {
         self.source = source
         self.surroundingContext = surroundingContext
         self.mode = mode
         self.currentConversion = currentConversion
         self.userDictionary = userDictionary
+        self.purpose = purpose
     }
+}
+
+public enum ConversionPurpose: Equatable, Sendable {
+    case ime
+    case speechRefinement
 }
 
 public struct ConversionResponse: Equatable, Sendable {
