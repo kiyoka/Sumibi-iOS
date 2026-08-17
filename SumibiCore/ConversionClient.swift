@@ -67,7 +67,7 @@ public enum ConversionCandidateMode: Equatable, Sendable {
         case .primary:
             1
         case .additional:
-            7
+            12
         }
     }
 }
