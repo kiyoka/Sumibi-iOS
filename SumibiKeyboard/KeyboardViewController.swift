@@ -21,6 +21,15 @@ final class KeyboardViewController: UIInputViewController {
         static let landscapeBottomInset: CGFloat = 2
     }
 
+    private enum KeyPressAnimationMetrics {
+        static let normalLabelFontSize: CGFloat = 20
+        static let pressedScale: CGFloat = 1.6
+        static let pressDuration: TimeInterval = 0.08
+        static let releaseDuration: TimeInterval = 0.24
+        static let releaseDamping: CGFloat = 0.58
+        static let releaseVelocity: CGFloat = 0.45
+    }
+
     private enum RepeatableKeyKind {
         case letter
         case symbol
@@ -81,6 +90,7 @@ final class KeyboardViewController: UIInputViewController {
     private var symbolPanel: UIStackView?
     private var symbolToggleButton: UIButton?
     private var repeatableKeyKinds: [ObjectIdentifier: RepeatableKeyKind] = [:]
+    private var pressedLabelOverlays: [ObjectIdentifier: UILabel] = [:]
     private var keyRepeatTimer: Timer?
     private weak var repeatingButton: UIButton?
     private var isCollapsingSymbolPanel = false
@@ -568,9 +578,11 @@ final class KeyboardViewController: UIInputViewController {
         }
         switch gesture.state {
         case .began:
+            animateKeyPress(button)
             startKeyRepeat(for: button)
         case .ended, .cancelled, .failed:
             stopKeyRepeat()
+            animateKeyRelease(button)
         default:
             break
         }
@@ -612,17 +624,151 @@ final class KeyboardViewController: UIInputViewController {
         )
 
         let button = UIButton(configuration: configuration)
-        button.titleLabel?.font = .systemFont(ofSize: 20)
+        button.titleLabel?.font = .systemFont(ofSize: KeyPressAnimationMetrics.normalLabelFontSize)
+        button.clipsToBounds = false
         button.accessibilityLabel = accessibilityLabel
         button.addTarget(self, action: #selector(keyTouchDown), for: .touchDown)
+        button.addTarget(self, action: #selector(keyTouchEntered), for: .touchDragEnter)
+        button.addTarget(
+            self,
+            action: #selector(keyTouchEnded),
+            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+        )
         return button
     }
 
-    @objc private func keyTouchDown() {
+    @objc private func keyTouchDown(_ sender: UIButton) {
+        animateKeyPress(sender)
         playKeyClick()
         if sharedSettings?.loadHapticFeedbackEnabled() ?? true {
             hapticFeedbackGenerator.prepare()
             hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
+        }
+    }
+
+    @objc private func keyTouchEntered(_ sender: UIButton) {
+        animateKeyPress(sender)
+    }
+
+    @objc private func keyTouchEnded(_ sender: UIButton) {
+        guard repeatingButton !== sender else {
+            return
+        }
+        animateKeyRelease(sender)
+    }
+
+    private func animateKeyPress(_ button: UIButton) {
+        button.layer.zPosition = 1
+        let pressedLabel = showPressedLabel(for: button)
+        let pressedTransform = CGAffineTransform(
+            scaleX: KeyPressAnimationMetrics.pressedScale,
+            y: KeyPressAnimationMetrics.pressedScale
+        )
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            button.layer.removeAllAnimations()
+            button.transform = pressedTransform
+            pressedLabel.transform = .identity
+            return
+        }
+        UIView.animate(
+            withDuration: KeyPressAnimationMetrics.pressDuration,
+            delay: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]
+        ) {
+            button.transform = pressedTransform
+            pressedLabel.transform = .identity
+        }
+    }
+
+    private func animateKeyRelease(_ button: UIButton) {
+        let pressedLabel = pressedLabelOverlays[ObjectIdentifier(button)]
+        let restingLabelTransform = pressedLabel.map { restingTransform(for: $0) } ?? .identity
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            button.layer.removeAllAnimations()
+            button.transform = .identity
+            pressedLabel?.transform = restingLabelTransform
+            hidePressedLabel(for: button)
+            button.layer.zPosition = 0
+            return
+        }
+        UIView.animate(
+            withDuration: KeyPressAnimationMetrics.releaseDuration,
+            delay: 0,
+            usingSpringWithDamping: KeyPressAnimationMetrics.releaseDamping,
+            initialSpringVelocity: KeyPressAnimationMetrics.releaseVelocity,
+            options: [.beginFromCurrentState, .allowUserInteraction]
+        ) {
+            button.transform = .identity
+            pressedLabel?.transform = restingLabelTransform
+        } completion: { _ in
+            if button.transform == .identity {
+                self.hidePressedLabel(for: button)
+                button.layer.zPosition = 0
+            }
+        }
+    }
+
+    private func showPressedLabel(for button: UIButton) -> UILabel {
+        let identifier = ObjectIdentifier(button)
+        let label: UILabel
+        if let existingLabel = pressedLabelOverlays[identifier] {
+            label = existingLabel
+        } else {
+            label = UILabel()
+            label.isUserInteractionEnabled = false
+            label.textAlignment = .center
+            label.textColor = .label
+            label.adjustsFontSizeToFitWidth = false
+            label.clipsToBounds = false
+            label.alpha = 0
+            label.layer.zPosition = 2
+            button.addSubview(label)
+            pressedLabelOverlays[identifier] = label
+        }
+
+        let title = button.configuration?.title ?? button.currentTitle ?? ""
+        label.text = title
+        let fontSize = pressedLabelFontSize(for: title)
+        label.font = .systemFont(ofSize: fontSize)
+        label.bounds = CGRect(
+            x: 0,
+            y: 0,
+            width: max(button.bounds.width * 3, 180),
+            height: max(button.bounds.height * 2, 100)
+        )
+        label.center = CGPoint(x: button.bounds.midX, y: button.bounds.midY)
+        if label.alpha == 0 {
+            label.transform = CGAffineTransform(
+                scaleX: KeyPressAnimationMetrics.normalLabelFontSize / fontSize,
+                y: KeyPressAnimationMetrics.normalLabelFontSize / fontSize
+            )
+            label.alpha = 1
+        }
+        button.titleLabel?.alpha = 0
+        return label
+    }
+
+    private func hidePressedLabel(for button: UIButton) {
+        pressedLabelOverlays[ObjectIdentifier(button)]?.alpha = 0
+        button.titleLabel?.alpha = 1
+    }
+
+    private func restingTransform(for label: UILabel) -> CGAffineTransform {
+        let fontSize = label.font.pointSize
+        let scale = KeyPressAnimationMetrics.normalLabelFontSize / fontSize
+        return CGAffineTransform(scaleX: scale, y: scale)
+    }
+
+    private func pressedLabelFontSize(for title: String) -> CGFloat {
+        switch title.count {
+        case 0...1:
+            40
+        case 2:
+            34
+        case 3...4:
+            26
+        default:
+            22
         }
     }
 
