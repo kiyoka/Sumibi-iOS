@@ -8,6 +8,19 @@ private final class AudioFeedbackInputView: UIInputView, UIInputViewAudioFeedbac
 }
 
 final class KeyboardViewController: UIInputViewController {
+    private enum LayoutMetrics {
+        static let keyHorizontalInset: CGFloat = 2
+        static let keyHorizontalSpacing: CGFloat = 2
+        static let portraitRowSpacing: CGFloat = 3
+        static let landscapeRowSpacing: CGFloat = 2
+        static let portraitSectionSpacing: CGFloat = 4
+        static let landscapeSectionSpacing: CGFloat = 2
+        static let portraitKeyRowsHeight: CGFloat = 296
+        static let landscapeKeyRowsHeight: CGFloat = 176
+        static let portraitBottomInset: CGFloat = 4
+        static let landscapeBottomInset: CGFloat = 2
+    }
+
     private enum RepeatableKeyKind {
         case letter
         case symbol
@@ -137,7 +150,7 @@ final class KeyboardViewController: UIInputViewController {
             makeBottomRow(),
         ])
         keyRows.axis = .vertical
-        keyRows.spacing = 8
+        keyRows.spacing = LayoutMetrics.portraitRowSpacing
         keyRows.distribution = .fillEqually
         keyRows.translatesAutoresizingMaskIntoConstraints = false
         keyRowsStack = keyRows
@@ -159,10 +172,12 @@ final class KeyboardViewController: UIInputViewController {
         let candidateBarBottomSpacingConstraint = candidateBar.bottomAnchor.constraint(
             equalTo: symbolPanel.topAnchor
         )
-        let keyRowsHeightConstraint = keyRows.heightAnchor.constraint(equalToConstant: 288)
+        let keyRowsHeightConstraint = keyRows.heightAnchor.constraint(
+            equalToConstant: LayoutMetrics.portraitKeyRowsHeight
+        )
         let keyRowsBottomConstraint = keyRows.bottomAnchor.constraint(
             equalTo: view.bottomAnchor,
-            constant: -8
+            constant: -LayoutMetrics.portraitBottomInset
         )
         let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: 352)
         let symbolPanelHeightConstraint = symbolPanel.heightAnchor.constraint(equalToConstant: 0)
@@ -182,11 +197,23 @@ final class KeyboardViewController: UIInputViewController {
             candidateBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
             candidateBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
             candidateBarBottomSpacingConstraint,
-            symbolPanel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-            symbolPanel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            symbolPanel.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor,
+                constant: LayoutMetrics.keyHorizontalInset
+            ),
+            symbolPanel.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor,
+                constant: -LayoutMetrics.keyHorizontalInset
+            ),
             symbolPanelBottomSpacingConstraint,
-            keyRows.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-            keyRows.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            keyRows.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor,
+                constant: LayoutMetrics.keyHorizontalInset
+            ),
+            keyRows.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor,
+                constant: -LayoutMetrics.keyHorizontalInset
+            ),
             keyRowsHeightConstraint,
             keyRowsBottomConstraint,
             keyboardHeightConstraint,
@@ -201,7 +228,9 @@ final class KeyboardViewController: UIInputViewController {
             ?? (traitCollection.verticalSizeClass == .compact)
         view.layer.cornerRadius = isLandscape ? 12 : 16
         let normalHeight: CGFloat = isLandscape ? 216 : 352
-        let sectionSpacing: CGFloat = isLandscape ? 4 : 8
+        let sectionSpacing = isLandscape
+            ? LayoutMetrics.landscapeSectionSpacing
+            : LayoutMetrics.portraitSectionSpacing
         let expandedPanelHeight: CGFloat = isLandscape ? 84 : 112
         let expandedExtraHeight = expandedPanelHeight + sectionSpacing
         keyboardHeightConstraint?.constant = normalHeight
@@ -213,12 +242,18 @@ final class KeyboardViewController: UIInputViewController {
         candidateBarBottomSpacingConstraint?.constant = isSymbolPanelExpanded
             ? -sectionSpacing
             : 0
-        keyRowsHeightConstraint?.constant = isLandscape ? 172 : 288
-        keyRowsBottomConstraint?.constant = isLandscape ? -4 : -8
+        keyRowsHeightConstraint?.constant = isLandscape
+            ? LayoutMetrics.landscapeKeyRowsHeight
+            : LayoutMetrics.portraitKeyRowsHeight
+        keyRowsBottomConstraint?.constant = isLandscape
+            ? -LayoutMetrics.landscapeBottomInset
+            : -LayoutMetrics.portraitBottomInset
         symbolPanelBottomSpacingConstraint?.constant = -sectionSpacing
-        keyRowsStack?.spacing = isLandscape ? 4 : 8
-        numberDividerCenterYConstraint?.constant = isLandscape ? 2 : 4
-        symbolPanel?.spacing = isLandscape ? 4 : 6
+        keyRowsStack?.spacing = isLandscape
+            ? LayoutMetrics.landscapeRowSpacing
+            : LayoutMetrics.portraitRowSpacing
+        numberDividerCenterYConstraint?.constant = (keyRowsStack?.spacing ?? 0) / 2
+        symbolPanel?.spacing = LayoutMetrics.keyHorizontalSpacing
     }
 
     private func addNumberDivider(to keyRows: UIStackView, below numberRow: UIView) {
@@ -233,7 +268,7 @@ final class KeyboardViewController: UIInputViewController {
 
         let centerYConstraint = divider.centerYAnchor.constraint(
             equalTo: numberRow.bottomAnchor,
-            constant: 4
+            constant: LayoutMetrics.portraitRowSpacing / 2
         )
         numberDividerCenterYConstraint = centerYConstraint
         NSLayoutConstraint.activate([
@@ -298,7 +333,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         let panel = UIStackView(arrangedSubviews: rows)
         panel.axis = .vertical
-        panel.spacing = 6
+        panel.spacing = LayoutMetrics.keyHorizontalSpacing
         panel.distribution = .fillEqually
         panel.accessibilityIdentifier = "expanded-symbol-panel"
         return panel
@@ -426,7 +461,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeRow(_ buttons: [UIButton]) -> UIStackView {
         let row = UIStackView(arrangedSubviews: buttons)
         row.axis = .horizontal
-        row.spacing = 6
+        row.spacing = LayoutMetrics.keyHorizontalSpacing
         row.distribution = .fillEqually
         return row
     }
