@@ -30,6 +30,11 @@ final class KeyboardViewController: UIInputViewController {
         static let releaseSettleScale: CGFloat = 1.04
     }
 
+    private enum KeyRepeatMetrics {
+        static let initialDelay: TimeInterval = 0.5
+        static let interval: TimeInterval = 0.075
+    }
+
     private enum RepeatableKeyKind {
         case letter
         case symbol
@@ -517,7 +522,7 @@ final class KeyboardViewController: UIInputViewController {
             target: self,
             action: #selector(repeatableKeyLongPressed)
         )
-        gesture.minimumPressDuration = 0.85
+        gesture.minimumPressDuration = KeyRepeatMetrics.initialDelay
         gesture.allowableMovement = 20
         button.addGestureRecognizer(gesture)
     }
@@ -548,7 +553,7 @@ final class KeyboardViewController: UIInputViewController {
         performRepeatAction(for: button)
 
         let timer = Timer(
-            timeInterval: 0.085,
+            timeInterval: KeyRepeatMetrics.interval,
             target: self,
             selector: #selector(keyRepeatTimerFired),
             userInfo: nil,
