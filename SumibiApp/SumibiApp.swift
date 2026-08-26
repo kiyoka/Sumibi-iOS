@@ -33,6 +33,7 @@ private struct ContentView: View {
     @State private var testResult = ""
     @State private var isTesting = false
     @State private var hapticFeedbackEnabled = true
+    @State private var conversionCompletionHapticEnabled = true
     @State private var keyClickSoundEnabled = true
     @State private var userDictionary = ""
     @State private var hasAIDataSharingConsent = false
@@ -291,6 +292,10 @@ private struct ContentView: View {
                 .onChange(of: hapticFeedbackEnabled) { _, isEnabled in
                     SharedSettingsStore()?.saveHapticFeedbackEnabled(isEnabled)
                 }
+            Toggle("変換完了時の触覚フィードバック", isOn: $conversionCompletionHapticEnabled)
+                .onChange(of: conversionCompletionHapticEnabled) { _, isEnabled in
+                    SharedSettingsStore()?.saveConversionCompletionHapticEnabled(isEnabled)
+                }
             Toggle("キークリック音", isOn: $keyClickSoundEnabled)
                 .onChange(of: keyClickSoundEnabled) { _, isEnabled in
                     SharedSettingsStore()?.saveKeyClickSoundEnabled(isEnabled)
@@ -298,7 +303,7 @@ private struct ContentView: View {
         } header: {
             Text("キーボード設定")
         } footer: {
-            Text("どちらも初期設定はONです。クリック音はiOS本体の消音・音量・キーボードの設定に従います。")
+            Text("すべて初期設定はONです。変換完了時は短く2回振動します。クリック音はiOS本体の消音・音量・キーボードの設定に従います。")
         }
     }
 
@@ -405,6 +410,7 @@ private struct ContentView: View {
             savedModel = configuration.model
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
+            conversionCompletionHapticEnabled = store.loadConversionCompletionHapticEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
             userDictionary = store.loadUserDictionary()
             hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)

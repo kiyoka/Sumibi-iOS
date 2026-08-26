@@ -22,6 +22,7 @@ public struct SharedSettingsStore {
     private enum Key {
         static let providerConfiguration = "providerConfiguration"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
+        static let conversionCompletionHapticEnabled = "conversionCompletionHapticEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
         static let userDictionary = "userDictionary"
         static let aiDataSharingConsentEndpoint = "aiDataSharingConsentEndpoint"
@@ -82,6 +83,17 @@ public struct SharedSettingsStore {
 
     public func saveHapticFeedbackEnabled(_ isEnabled: Bool) {
         defaults.set(isEnabled, forKey: Key.hapticFeedbackEnabled)
+    }
+
+    public func loadConversionCompletionHapticEnabled() -> Bool {
+        guard defaults.object(forKey: Key.conversionCompletionHapticEnabled) != nil else {
+            return true
+        }
+        return defaults.bool(forKey: Key.conversionCompletionHapticEnabled)
+    }
+
+    public func saveConversionCompletionHapticEnabled(_ isEnabled: Bool) {
+        defaults.set(isEnabled, forKey: Key.conversionCompletionHapticEnabled)
     }
 
     public func loadKeyClickSoundEnabled() -> Bool {
