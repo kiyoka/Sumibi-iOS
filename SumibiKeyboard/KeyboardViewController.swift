@@ -61,6 +61,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private lazy var sharedSettings = SharedSettingsStore()
     private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
+    private let conversionCompletionFeedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let candidateStack = UIStackView()
     private var letterButtons: [UIButton] = []
     private var compositionTracker = CompositionTracker()
@@ -1038,6 +1039,7 @@ final class KeyboardViewController: UIInputViewController {
         compositionTracker.reset()
         showCandidates()
         refreshConvertButton()
+        playConversionCompletionFeedback()
     }
 
     private func failConversion(
@@ -1383,6 +1385,7 @@ final class KeyboardViewController: UIInputViewController {
         compositionTracker.reset()
         showCandidates()
         refreshConvertButton()
+        playConversionCompletionFeedback()
     }
 
     private func failSelectedTextConversion(
@@ -1551,6 +1554,25 @@ final class KeyboardViewController: UIInputViewController {
         additionalCandidateErrorMessage = nil
         showCandidates()
         refreshConvertButton()
+        playConversionCompletionFeedback()
+    }
+
+    private func playConversionCompletionFeedback() {
+        guard sharedSettings?.loadConversionCompletionHapticEnabled() ?? true else {
+            return
+        }
+        conversionCompletionFeedbackGenerator.prepare()
+        conversionCompletionFeedbackGenerator.impactOccurred(intensity: 0.75)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard
+                let self,
+                self.sharedSettings?.loadConversionCompletionHapticEnabled() ?? true
+            else {
+                return
+            }
+            self.conversionCompletionFeedbackGenerator.prepare()
+            self.conversionCompletionFeedbackGenerator.impactOccurred(intensity: 0.75)
+        }
     }
 
     private func failAdditionalCandidates(_ error: Error, requestID: UUID) {
