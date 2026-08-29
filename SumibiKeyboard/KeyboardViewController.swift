@@ -24,10 +24,10 @@ final class KeyboardViewController: UIInputViewController {
     private enum KeyPressAnimationMetrics {
         static let normalLabelFontSize: CGFloat = 20
         static let pressedScale: CGFloat = 1.6
-        static let pressDuration: TimeInterval = 0.08
-        static let releaseDuration: TimeInterval = 0.24
-        static let releaseDamping: CGFloat = 0.58
-        static let releaseVelocity: CGFloat = 0.45
+        static let pressDuration: TimeInterval = 0.06
+        static let releaseApproachDuration: TimeInterval = 0.12
+        static let releaseSettleDuration: TimeInterval = 0.06
+        static let releaseSettleScale: CGFloat = 1.04
     }
 
     private enum RepeatableKeyKind {
@@ -692,19 +692,37 @@ final class KeyboardViewController: UIInputViewController {
             button.layer.zPosition = 0
             return
         }
+        let settleTransform = CGAffineTransform(
+            scaleX: KeyPressAnimationMetrics.releaseSettleScale,
+            y: KeyPressAnimationMetrics.releaseSettleScale
+        )
+        let settleLabelTransform = restingLabelTransform.scaledBy(
+            x: KeyPressAnimationMetrics.releaseSettleScale,
+            y: KeyPressAnimationMetrics.releaseSettleScale
+        )
         UIView.animate(
-            withDuration: KeyPressAnimationMetrics.releaseDuration,
+            withDuration: KeyPressAnimationMetrics.releaseApproachDuration,
             delay: 0,
-            usingSpringWithDamping: KeyPressAnimationMetrics.releaseDamping,
-            initialSpringVelocity: KeyPressAnimationMetrics.releaseVelocity,
-            options: [.beginFromCurrentState, .allowUserInteraction]
+            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]
         ) {
-            button.transform = .identity
-            pressedLabel?.transform = restingLabelTransform
+            button.transform = settleTransform
+            pressedLabel?.transform = settleLabelTransform
         } completion: { _ in
-            if button.transform == .identity {
-                self.hidePressedLabel(for: button)
-                button.layer.zPosition = 0
+            guard button.transform == settleTransform else {
+                return
+            }
+            UIView.animate(
+                withDuration: KeyPressAnimationMetrics.releaseSettleDuration,
+                delay: 0,
+                options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseInOut]
+            ) {
+                button.transform = .identity
+                pressedLabel?.transform = restingLabelTransform
+            } completion: { _ in
+                if button.transform == .identity {
+                    self.hidePressedLabel(for: button)
+                    button.layer.zPosition = 0
+                }
             }
         }
     }
