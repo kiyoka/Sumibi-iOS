@@ -97,6 +97,8 @@ final class KeyboardViewController: UIInputViewController {
     private var symbolToggleButton: UIButton?
     private var repeatableKeyKinds: [ObjectIdentifier: RepeatableKeyKind] = [:]
     private var pressedLabelOverlays: [ObjectIdentifier: UILabel] = [:]
+    private var keyAnimationGenerations: [ObjectIdentifier: UInt] = [:]
+    private var keyPressStartTimes: [ObjectIdentifier: CFTimeInterval] = [:]
     private var keyRepeatTimer: Timer?
     private weak var repeatingButton: UIButton?
     private var isCollapsingSymbolPanel = false
@@ -380,7 +382,7 @@ final class KeyboardViewController: UIInputViewController {
             accessibilityLabel: "削除",
             action: #selector(deleteTapped)
         )
-        registerKeyRepeat(for: deleteButton, kind: .delete)
+        configureDeleteButton(deleteButton)
         let letters = ["z", "x", "c", "v", "b", "n", "m"].map(makeLetterButton)
         let row = makeRow([shiftButton] + letters + [deleteButton])
         row.distribution = .fill
@@ -527,6 +529,68 @@ final class KeyboardViewController: UIInputViewController {
         button.addGestureRecognizer(gesture)
     }
 
+    private func configureDeleteButton(_ button: UIButton) {
+        button.removeTarget(nil, action: nil, for: .allEvents)
+        repeatableKeyKinds[ObjectIdentifier(button)] = .delete
+        let gesture = UILongPressGestureRecognizer(
+            target: self,
+            action: #selector(deleteKeyPressed)
+        )
+        gesture.minimumPressDuration = 0
+        gesture.allowableMovement = 20
+        button.addGestureRecognizer(gesture)
+    }
+
+    @objc private func deleteKeyPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard let button = gesture.view as? UIButton else {
+            stopKeyRepeat()
+            return
+        }
+        switch gesture.state {
+        case .began:
+            stopKeyRepeat()
+            repeatingButton = button
+            animateKeyPress(button)
+            playKeyClick()
+            if sharedSettings?.loadHapticFeedbackEnabled() ?? true {
+                hapticFeedbackGenerator.prepare()
+                hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
+            }
+            deleteTapped()
+
+            let timer = Timer(
+                timeInterval: KeyRepeatMetrics.initialDelay,
+                target: self,
+                selector: #selector(deleteRepeatDelayElapsed),
+                userInfo: nil,
+                repeats: false
+            )
+            keyRepeatTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        case .ended, .cancelled, .failed:
+            stopKeyRepeat()
+        default:
+            break
+        }
+    }
+
+    @objc private func deleteRepeatDelayElapsed() {
+        guard let repeatingButton else {
+            stopKeyRepeat()
+            return
+        }
+        performRepeatAction(for: repeatingButton)
+        let timer = Timer(
+            timeInterval: KeyRepeatMetrics.interval,
+            target: self,
+            selector: #selector(keyRepeatTimerFired),
+            userInfo: nil,
+            repeats: true
+        )
+        keyRepeatTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
     private func performRepeatAction(for button: UIButton) {
         guard let kind = repeatableKeyKinds[ObjectIdentifier(button)] else {
             stopKeyRepeat()
@@ -564,9 +628,13 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func stopKeyRepeat() {
+        let buttonToRelease = repeatingButton
         keyRepeatTimer?.invalidate()
         keyRepeatTimer = nil
         repeatingButton = nil
+        if let buttonToRelease {
+            animateKeyRelease(buttonToRelease)
+        }
     }
 
     @objc private func keyRepeatTimerFired() {
@@ -588,7 +656,6 @@ final class KeyboardViewController: UIInputViewController {
             startKeyRepeat(for: button)
         case .ended, .cancelled, .failed:
             stopKeyRepeat()
-            animateKeyRelease(button)
         default:
             break
         }
@@ -638,8 +705,9 @@ final class KeyboardViewController: UIInputViewController {
         button.addTarget(
             self,
             action: #selector(keyTouchEnded),
-            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+            for: [.touchUpInside, .touchUpOutside, .touchDragExit]
         )
+        button.addTarget(self, action: #selector(keyTouchCancelled), for: .touchCancel)
         return button
     }
 
@@ -657,6 +725,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func keyTouchEnded(_ sender: UIButton) {
+        animateKeyRelease(sender)
+    }
+
+    @objc private func keyTouchCancelled(_ sender: UIButton) {
         guard repeatingButton !== sender else {
             return
         }
@@ -664,11 +736,13 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func animateKeyPress(_ button: UIButton) {
+        _ = advanceKeyAnimationGeneration(for: button)
+        keyPressStartTimes[ObjectIdentifier(button)] = CACurrentMediaTime()
         button.layer.zPosition = 1
         let pressedLabel = showPressedLabel(for: button)
-        let pressedTransform = CGAffineTransform(
-            scaleX: KeyPressAnimationMetrics.pressedScale,
-            y: KeyPressAnimationMetrics.pressedScale
+        let pressedTransform = keyTransform(
+            for: button,
+            scale: KeyPressAnimationMetrics.pressedScale
         )
         guard !UIAccessibility.isReduceMotionEnabled else {
             button.layer.removeAllAnimations()
@@ -687,6 +761,37 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func animateKeyRelease(_ button: UIButton) {
+        let animationGeneration = advanceKeyAnimationGeneration(for: button)
+        let buttonIdentifier = ObjectIdentifier(button)
+        let elapsed = CACurrentMediaTime() - (keyPressStartTimes[buttonIdentifier] ?? 0)
+        let remainingPressDuration = max(0, KeyPressAnimationMetrics.pressDuration - elapsed)
+        if remainingPressDuration > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + remainingPressDuration) { [weak self, weak button] in
+                guard let self, let button,
+                      self.keyAnimationGenerations[buttonIdentifier] == animationGeneration else {
+                    return
+                }
+                self.performKeyRelease(
+                    button,
+                    animationGeneration: animationGeneration,
+                    buttonIdentifier: buttonIdentifier
+                )
+            }
+            return
+        }
+        performKeyRelease(
+            button,
+            animationGeneration: animationGeneration,
+            buttonIdentifier: buttonIdentifier
+        )
+    }
+
+    private func performKeyRelease(
+        _ button: UIButton,
+        animationGeneration: UInt,
+        buttonIdentifier: ObjectIdentifier
+    ) {
+        keyPressStartTimes[buttonIdentifier] = nil
         let pressedLabel = pressedLabelOverlays[ObjectIdentifier(button)]
         let restingLabelTransform = pressedLabel.map { restingTransform(for: $0) } ?? .identity
         guard !UIAccessibility.isReduceMotionEnabled else {
@@ -697,39 +802,65 @@ final class KeyboardViewController: UIInputViewController {
             button.layer.zPosition = 0
             return
         }
-        let settleTransform = CGAffineTransform(
-            scaleX: KeyPressAnimationMetrics.releaseSettleScale,
-            y: KeyPressAnimationMetrics.releaseSettleScale
+        let settleTransform = keyTransform(
+            for: button,
+            scale: KeyPressAnimationMetrics.releaseSettleScale
         )
         let settleLabelTransform = restingLabelTransform.scaledBy(
             x: KeyPressAnimationMetrics.releaseSettleScale,
             y: KeyPressAnimationMetrics.releaseSettleScale
         )
-        UIView.animate(
-            withDuration: KeyPressAnimationMetrics.releaseApproachDuration,
+        let releaseDuration = KeyPressAnimationMetrics.releaseApproachDuration
+            + KeyPressAnimationMetrics.releaseSettleDuration
+        let approachRatio = KeyPressAnimationMetrics.releaseApproachDuration / releaseDuration
+        UIView.animateKeyframes(
+            withDuration: releaseDuration,
             delay: 0,
-            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]
+            options: [.beginFromCurrentState, .allowUserInteraction, .calculationModeCubic]
         ) {
-            button.transform = settleTransform
-            pressedLabel?.transform = settleLabelTransform
-        } completion: { _ in
-            guard button.transform == settleTransform else {
-                return
+            UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: approachRatio) {
+                button.transform = settleTransform
+                pressedLabel?.transform = settleLabelTransform
             }
-            UIView.animate(
-                withDuration: KeyPressAnimationMetrics.releaseSettleDuration,
-                delay: 0,
-                options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseInOut]
+            UIView.addKeyframe(
+                withRelativeStartTime: approachRatio,
+                relativeDuration: 1 - approachRatio
             ) {
                 button.transform = .identity
                 pressedLabel?.transform = restingLabelTransform
-            } completion: { _ in
-                if button.transform == .identity {
-                    self.hidePressedLabel(for: button)
-                    button.layer.zPosition = 0
-                }
             }
+        } completion: { _ in
+            guard self.keyAnimationGenerations[buttonIdentifier] == animationGeneration else {
+                return
+            }
+            button.transform = .identity
+            pressedLabel?.transform = restingLabelTransform
+            self.hidePressedLabel(for: button)
+            button.layer.zPosition = 0
         }
+    }
+
+    private func keyTransform(for button: UIButton, scale: CGFloat) -> CGAffineTransform {
+        guard let superview = button.superview else {
+            return CGAffineTransform(scaleX: scale, y: scale)
+        }
+
+        let centerInKeyboard = superview.convert(button.center, to: view)
+        let expandedHalfWidth = button.bounds.width * scale / 2
+        let leftOverflow = max(0, expandedHalfWidth - centerInKeyboard.x)
+        let rightOverflow = max(0, centerInKeyboard.x + expandedHalfWidth - view.bounds.width)
+        let horizontalOffset = leftOverflow - rightOverflow
+
+        return CGAffineTransform(translationX: horizontalOffset, y: 0)
+            .scaledBy(x: scale, y: scale)
+    }
+
+    @discardableResult
+    private func advanceKeyAnimationGeneration(for button: UIButton) -> UInt {
+        let identifier = ObjectIdentifier(button)
+        let generation = (keyAnimationGenerations[identifier] ?? 0) &+ 1
+        keyAnimationGenerations[identifier] = generation
+        return generation
     }
 
     private func showPressedLabel(for button: UIButton) -> UILabel {
