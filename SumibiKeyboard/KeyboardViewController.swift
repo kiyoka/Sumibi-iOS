@@ -28,6 +28,9 @@ final class KeyboardViewController: UIInputViewController {
         static let releaseApproachDuration: TimeInterval = 0.12
         static let releaseSettleDuration: TimeInterval = 0.06
         static let releaseSettleScale: CGFloat = 1.04
+        static let afterglowOpacity: Float = 0.52
+        static let afterglowRadius: CGFloat = 9
+        static let afterglowFadeDuration: TimeInterval = 0.24
     }
 
     private enum KeyRepeatMetrics {
@@ -752,6 +755,7 @@ final class KeyboardViewController: UIInputViewController {
             pressedLabel.transform = .identity
             return
         }
+        showKeyAfterglow(for: button)
         UIView.animate(
             withDuration: KeyPressAnimationMetrics.pressDuration,
             delay: 0,
@@ -763,6 +767,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func animateKeyRelease(_ button: UIButton) {
+        fadeKeyAfterglow(for: button)
         let animationGeneration = advanceKeyAnimationGeneration(for: button)
         let buttonIdentifier = ObjectIdentifier(button)
         let elapsed = CACurrentMediaTime() - (keyPressStartTimes[buttonIdentifier] ?? 0)
@@ -786,6 +791,37 @@ final class KeyboardViewController: UIInputViewController {
             animationGeneration: animationGeneration,
             buttonIdentifier: buttonIdentifier
         )
+    }
+
+    private func showKeyAfterglow(for button: UIButton) {
+        let layer = button.layer
+        layer.removeAnimation(forKey: "sumibi.afterglow")
+        layer.shadowColor = UIColor.systemOrange
+            .resolvedColor(with: traitCollection)
+            .cgColor
+        layer.shadowOffset = .zero
+        layer.shadowRadius = KeyPressAnimationMetrics.afterglowRadius
+        layer.shadowPath = UIBezierPath(
+            roundedRect: button.bounds,
+            cornerRadius: 8
+        ).cgPath
+        layer.shadowOpacity = KeyPressAnimationMetrics.afterglowOpacity
+    }
+
+    private func fadeKeyAfterglow(for button: UIButton) {
+        let layer = button.layer
+        let presentedOpacity = layer.presentation()?.shadowOpacity ?? 0
+        guard layer.shadowOpacity > 0 || presentedOpacity > 0 else {
+            return
+        }
+        let currentOpacity = layer.presentation()?.shadowOpacity ?? layer.shadowOpacity
+        layer.shadowOpacity = 0
+        let animation = CABasicAnimation(keyPath: "shadowOpacity")
+        animation.fromValue = currentOpacity
+        animation.toValue = 0
+        animation.duration = KeyPressAnimationMetrics.afterglowFadeDuration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.add(animation, forKey: "sumibi.afterglow")
     }
 
     private func performKeyRelease(
