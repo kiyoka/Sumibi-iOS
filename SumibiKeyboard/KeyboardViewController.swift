@@ -84,6 +84,7 @@ final class KeyboardViewController: UIInputViewController {
     private var normalConvertWidthConstraint: NSLayoutConstraint?
     private var selectedConvertWidthConstraint: NSLayoutConstraint?
     private var isShowingSelectedTextControls = false
+    private var convertButtonEmberLevel = -1
     private var keyRowsStack: UIStackView?
     private var candidateBarHeightConstraint: NSLayoutConstraint?
     private var candidateBarBottomSpacingConstraint: NSLayoutConstraint?
@@ -1096,6 +1097,10 @@ final class KeyboardViewController: UIInputViewController {
         updateSelectedTextControls(isSelected: hasSelectedText)
         convertButton?.isEnabled = isEnabled
         convertButton?.alpha = isEnabled ? 1 : 0.45
+        updateConvertButtonAppearance(
+            hasSelectedText: hasSelectedText,
+            compositionLength: isEnabled ? (snapshot?.source.count ?? 0) : 0
+        )
         if hasSelectedText {
             convertButton?.accessibilityValue = selectionIsValid
                 ? "選択中の\(selectedText.count)文字を変換"
@@ -1117,9 +1122,60 @@ final class KeyboardViewController: UIInputViewController {
         selectedSpaceWidthConstraint?.isActive = isSelected
         selectedConvertWidthConstraint?.isActive = isSelected
         convertButton?.configuration?.title = isSelected ? "範囲を変換" : "変換"
-        convertButton?.configuration?.baseBackgroundColor = isSelected ? .systemBlue : .systemGray3
-        convertButton?.configuration?.baseForegroundColor = isSelected ? .white : .label
         convertButton?.accessibilityLabel = isSelected ? "範囲を変換" : "変換"
+    }
+
+    private func updateConvertButtonAppearance(
+        hasSelectedText: Bool,
+        compositionLength: Int
+    ) {
+        let emberLevel: Int
+        if hasSelectedText {
+            emberLevel = -2
+        } else {
+            switch compositionLength {
+            case 1...2:
+                emberLevel = 1
+            case 3...5:
+                emberLevel = 2
+            case 6...11:
+                emberLevel = 3
+            case 12...:
+                emberLevel = 4
+            default:
+                emberLevel = 0
+            }
+        }
+        guard convertButtonEmberLevel != emberLevel else {
+            return
+        }
+        convertButtonEmberLevel = emberLevel
+
+        let backgroundColor: UIColor
+        let foregroundColor: UIColor
+        switch emberLevel {
+        case -2:
+            backgroundColor = .systemBlue
+            foregroundColor = .white
+        case 1:
+            backgroundColor = UIColor(red: 0.76, green: 0.29, blue: 0.02, alpha: 1)
+            foregroundColor = .black
+        case 2:
+            backgroundColor = UIColor(red: 0.87, green: 0.37, blue: 0.01, alpha: 1)
+            foregroundColor = .black
+        case 3:
+            backgroundColor = UIColor(red: 0.95, green: 0.43, blue: 0.00, alpha: 1)
+            foregroundColor = .black
+        case 4:
+            backgroundColor = .systemOrange
+            foregroundColor = .black
+        default:
+            backgroundColor = .systemGray3
+            foregroundColor = .label
+        }
+
+        convertButton?.configuration?.baseBackgroundColor = backgroundColor
+        convertButton?.configuration?.baseForegroundColor = foregroundColor
     }
 
     private func replaceHostText(_ current: String, with replacement: String) {
