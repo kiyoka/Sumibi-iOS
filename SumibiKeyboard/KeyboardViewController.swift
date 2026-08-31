@@ -101,6 +101,7 @@ final class KeyboardViewController: UIInputViewController {
     private var keyPressStartTimes: [ObjectIdentifier: CFTimeInterval] = [:]
     private var keyRepeatTimer: Timer?
     private weak var repeatingButton: UIButton?
+    private var isCandidateSelectionAnimating = false
     private var isCollapsingSymbolPanel = false
     private var isSymbolPanelExpanded = false
     private var isShifted = false
@@ -1804,8 +1805,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func candidateTapped(_ sender: UIButton) {
+        guard !isCandidateSelectionAnimating else {
+            return
+        }
         guard
-            var session = candidateSession,
+            let session = candidateSession,
             session.options.indices.contains(sender.tag)
         else {
             return
@@ -1822,7 +1826,64 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        let replacement = session.options[sender.tag]
+        let selectedIndex = sender.tag
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            applyCandidateSelection(at: selectedIndex)
+            return
+        }
+
+        isCandidateSelectionAnimating = true
+        sender.isUserInteractionEnabled = false
+        sender.layer.zPosition = 1
+        UIView.animateKeyframes(
+            withDuration: 0.28,
+            delay: 0,
+            options: [.allowUserInteraction, .calculationModeCubic]
+        ) {
+            UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.40) {
+                sender.transform = CGAffineTransform(translationX: 0, y: -4)
+                    .scaledBy(x: 1.22, y: 1.22)
+            }
+            UIView.addKeyframe(withRelativeStartTime: 0.40, relativeDuration: 0.25) {
+                sender.transform = CGAffineTransform(translationX: 0, y: 1)
+                    .scaledBy(x: 0.94, y: 0.94)
+            }
+            UIView.addKeyframe(withRelativeStartTime: 0.65, relativeDuration: 0.20) {
+                sender.transform = CGAffineTransform(translationX: 0, y: -1)
+                    .scaledBy(x: 1.04, y: 1.04)
+            }
+            UIView.addKeyframe(withRelativeStartTime: 0.85, relativeDuration: 0.15) {
+                sender.transform = .identity
+            }
+        } completion: { _ in
+            sender.transform = .identity
+            sender.layer.zPosition = 0
+            sender.isUserInteractionEnabled = true
+            self.isCandidateSelectionAnimating = false
+            self.applyCandidateSelection(at: selectedIndex)
+        }
+    }
+
+    private func applyCandidateSelection(at index: Int) {
+        guard
+            var session = candidateSession,
+            session.options.indices.contains(index)
+        else {
+            return
+        }
+
+        let expectedSuffix = String(session.current.suffix(32))
+        guard
+            !expectedSuffix.isEmpty,
+            textDocumentProxy.documentContextBeforeInput?.hasSuffix(expectedSuffix) == true
+        else {
+            candidateSession = nil
+            undoRecord = nil
+            showCandidateMessage("入力内容が変更されたため置換しません")
+            return
+        }
+
+        let replacement = session.options[index]
         guard replacement != session.current else {
             return
         }
