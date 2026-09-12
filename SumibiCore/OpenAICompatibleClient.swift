@@ -107,10 +107,11 @@ public struct OpenAICompatibleClient: ConversionClient {
                     Message(
                         role: "system",
                         content: """
-                        あなたはローマ字と英語を自然な日本語へ変換するIMEです。
+                        あなたはローマ字と英語を、通常は自然な日本語へ変換するIMEです。ユーザーによる追加の変換指示で出力言語が指定された場合は、その言語へ翻訳してください。
                         Markdown記法、URL、固有名詞は可能な限り維持してください。
                         入力にない情報は追加しないでください。
                         \(userDictionaryInstructions(for: request))
+                        \(customSystemPromptInstructions(for: request))
                         \(candidateInstructions(for: request))
                         JSON以外の説明やMarkdownのコードフェンスは返さないでください。
                         """
@@ -179,6 +180,19 @@ public struct OpenAICompatibleClient: ConversionClient {
         """
     }
 
+    private func customSystemPromptInstructions(for request: ConversionRequest) -> String {
+        let prompt = request.customSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            return "ユーザーによる追加の変換指示はありません。"
+        }
+        return """
+        次の内容は、ユーザーが設定した変換結果の出力言語・文体・表記・形式・補正方針です。可能な範囲で従ってください。ただし、候補数、JSON形式、入力にない情報を追加しないなど、このプロンプト内のほかの規則を優先してください。
+        <user_conversion_preferences>
+        \(prompt)
+        </user_conversion_preferences>
+        """
+    }
+
     private func candidateInstructions(for request: ConversionRequest) -> String {
         if request.mode == .additional {
             return """
@@ -194,7 +208,7 @@ public struct OpenAICompatibleClient: ConversionClient {
             """
         }
         return """
-        文脈に最も自然な日本語変換を1件だけ作り、{"candidates":["候補1"]}というJSONだけを返してください。
+        ユーザーによる追加の変換指示がある場合はそれを反映し、ない場合は文脈に最も自然な日本語変換を1件だけ作ってください。{"candidates":["候補1"]}というJSONだけを返してください。
         """
     }
 

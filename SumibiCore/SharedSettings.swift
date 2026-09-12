@@ -16,6 +16,37 @@ public struct ProviderConfiguration: Codable, Equatable, Sendable {
     }
 }
 
+public struct ConversionPromptPreset: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var prompt: String
+
+    public init(id: UUID = UUID(), name: String, prompt: String) {
+        self.id = id
+        self.name = name
+        self.prompt = prompt
+    }
+}
+
+public struct ConversionPromptConfiguration: Codable, Equatable, Sendable {
+    public static let maximumPresetCount = 3
+
+    public var presets: [ConversionPromptPreset]
+    public var activePresetID: UUID?
+
+    public init(presets: [ConversionPromptPreset] = [], activePresetID: UUID? = nil) {
+        self.presets = Array(presets.prefix(Self.maximumPresetCount))
+        self.activePresetID = self.presets.contains { $0.id == activePresetID }
+            ? activePresetID
+            : nil
+    }
+
+    public var activePrompt: String {
+        guard let activePresetID else { return "" }
+        return presets.first { $0.id == activePresetID }?.prompt ?? ""
+    }
+}
+
 public struct SharedSettingsStore {
     public static let appGroupIdentifier = "group.org.sumibi.Sumibi-iOS"
 
@@ -25,6 +56,8 @@ public struct SharedSettingsStore {
         static let conversionCompletionHapticEnabled = "conversionCompletionHapticEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
         static let userDictionary = "userDictionary"
+        static let customSystemPrompt = "customSystemPrompt"
+        static let conversionPromptConfiguration = "conversionPromptConfiguration"
         static let aiDataSharingConsentEndpoint = "aiDataSharingConsentEndpoint"
         static let usageStatistics = "usageStatistics"
     }
@@ -113,6 +146,42 @@ public struct SharedSettingsStore {
 
     public func saveUserDictionary(_ dictionary: String) {
         defaults.set(dictionary, forKey: Key.userDictionary)
+    }
+
+    public func loadConversionPromptConfiguration() -> ConversionPromptConfiguration {
+        if
+            let data = defaults.data(forKey: Key.conversionPromptConfiguration),
+            let configuration = try? decoder.decode(ConversionPromptConfiguration.self, from: data)
+        {
+            return ConversionPromptConfiguration(
+                presets: configuration.presets,
+                activePresetID: configuration.activePresetID
+            )
+        }
+
+        let legacyPrompt = defaults.string(forKey: Key.customSystemPrompt) ?? ""
+        guard !legacyPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ConversionPromptConfiguration()
+        }
+        let preset = ConversionPromptPreset(
+            id: UUID(uuidString: "3C307E6D-C21C-45A6-B42B-A6B6700266A1")!,
+            name: "プリセット1",
+            prompt: legacyPrompt
+        )
+        return ConversionPromptConfiguration(presets: [preset], activePresetID: preset.id)
+    }
+
+    public func saveConversionPromptConfiguration(_ configuration: ConversionPromptConfiguration) throws {
+        let normalized = ConversionPromptConfiguration(
+            presets: configuration.presets,
+            activePresetID: configuration.activePresetID
+        )
+        defaults.set(try encoder.encode(normalized), forKey: Key.conversionPromptConfiguration)
+        defaults.removeObject(forKey: Key.customSystemPrompt)
+    }
+
+    public func loadCustomSystemPrompt() -> String {
+        loadConversionPromptConfiguration().activePrompt
     }
 
     public func hasAIDataSharingConsent(for endpoint: String) -> Bool {

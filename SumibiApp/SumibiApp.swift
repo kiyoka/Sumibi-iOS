@@ -36,6 +36,7 @@ private struct ContentView: View {
     @State private var conversionCompletionHapticEnabled = true
     @State private var keyClickSoundEnabled = true
     @State private var userDictionary = ""
+    @State private var conversionPromptConfiguration = ConversionPromptConfiguration()
     @State private var hasAIDataSharingConsent = false
     @State private var isShowingAPIKeyDeletionConfirmation = false
     @State private var usageStatistics: [ModelUsageStatistics] = []
@@ -48,6 +49,7 @@ private struct ContentView: View {
                 introductionSection
                 providerSection
                 keyboardBehaviorSection
+                customSystemPromptSection
                 userDictionarySection
                 conversionTestSection
                 usageSection
@@ -281,6 +283,36 @@ private struct ContentView: View {
         }
     }
 
+    private var customSystemPromptSection: some View {
+        Section {
+            NavigationLink {
+                ConversionPromptSettingsView(
+                    initialConfiguration: conversionPromptConfiguration,
+                    onSave: { savedConfiguration in
+                        conversionPromptConfiguration = savedConfiguration
+                    }
+                )
+            } label: {
+                HStack {
+                    Label("文体プリセット", systemImage: "text.bubble")
+                    Spacer()
+                    Text(activeConversionPromptPresetName)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } footer: {
+            Text("出力言語や文体、文章の形式をAIへの追加指示として設定します。")
+        }
+    }
+
+    private var activeConversionPromptPresetName: String {
+        guard let activePresetID = conversionPromptConfiguration.activePresetID else {
+            return "使用しない"
+        }
+        return conversionPromptConfiguration.presets.first { $0.id == activePresetID }?.name
+            ?? "使用しない"
+    }
+
     private var userDictionarySummary: String {
         let count = UserDictionary.validate(userDictionary).entries.count
         return count == 0 ? "未設定" : "\(count)件"
@@ -337,7 +369,7 @@ private struct ContentView: View {
             )
             Label("変換キーを押したときだけ送信", systemImage: "hand.tap")
             Label("変換対象と最小限の周辺文脈を送信", systemImage: "text.quote")
-            Label("登録したユーザー辞書は毎回あわせて送信", systemImage: "character.book.closed")
+            Label("ユーザー辞書と変換プロンプトは毎回あわせて送信", systemImage: "character.book.closed")
             Label("キー入力や原文をログへ保存しない", systemImage: "doc.badge.ellipsis")
             Label("Sumibi運営のサーバーを経由しない", systemImage: "arrow.left.arrow.right")
             Label("APIキーは端末内のKeychainへ保存", systemImage: "key")
@@ -348,7 +380,7 @@ private struct ContentView: View {
         } header: {
             Text("プライバシー")
         } footer: {
-            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書を上記の第三者AIへ送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
+            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書、変換プロンプトを上記の第三者AIへ送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
         }
     }
 
@@ -413,6 +445,7 @@ private struct ContentView: View {
             conversionCompletionHapticEnabled = store.loadConversionCompletionHapticEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
             userDictionary = store.loadUserDictionary()
+            conversionPromptConfiguration = store.loadConversionPromptConfiguration()
             hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)
         }
         do {
@@ -496,7 +529,8 @@ private struct ContentView: View {
             let response = try await client.convert(
                 ConversionRequest(
                     source: testSource,
-                    userDictionary: userDictionary
+                    userDictionary: userDictionary,
+                    customSystemPrompt: conversionPromptConfiguration.activePrompt
                 )
             )
             if let usage = response.usage {
@@ -532,6 +566,410 @@ private struct ContentView: View {
             "APIサーバーでエラーが発生しました。"
         case .httpError:
             "APIリクエストに失敗しました。"
+        }
+    }
+}
+
+private struct ConversionPromptSettingsView: View {
+    let initialConfiguration: ConversionPromptConfiguration
+    let onSave: (ConversionPromptConfiguration) -> Void
+
+    @State private var configuration: ConversionPromptConfiguration
+
+    init(
+        initialConfiguration: ConversionPromptConfiguration,
+        onSave: @escaping (ConversionPromptConfiguration) -> Void
+    ) {
+        self.initialConfiguration = initialConfiguration
+        self.onSave = onSave
+        _configuration = State(initialValue: initialConfiguration)
+    }
+
+    var body: some View {
+        List {
+            Section("使用するプリセット") {
+                Picker("現在の設定", selection: $configuration.activePresetID) {
+                    Text("使用しない").tag(nil as UUID?)
+                    ForEach(configuration.presets) { preset in
+                        Text(preset.name).tag(preset.id as UUID?)
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .onChange(of: configuration.activePresetID) { _, _ in
+                    persist()
+                }
+            }
+
+            Section {
+                ForEach(configuration.presets) { preset in
+                    NavigationLink {
+                        ConversionPromptPresetEditor(
+                            initialPreset: preset,
+                            onSave: update
+                        )
+                    } label: {
+                        HStack {
+                            Text(preset.name)
+                            Spacer()
+                            if configuration.activePresetID == preset.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                }
+                .onDelete(perform: delete)
+
+                Button {
+                    addPreset()
+                } label: {
+                    Label("プリセットを追加", systemImage: "plus")
+                }
+                .disabled(configuration.presets.count >= ConversionPromptConfiguration.maximumPresetCount)
+            } header: {
+                Text("保存済みプリセット")
+            } footer: {
+                Text("最大3件まで登録できます。プリセットを開くと、編集と変換結果の比較ができます。")
+            }
+        }
+        .navigationTitle("文体プリセット")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func addPreset() {
+        guard configuration.presets.count < ConversionPromptConfiguration.maximumPresetCount else {
+            return
+        }
+        configuration.presets.append(
+            ConversionPromptPreset(
+                name: "プリセット\(configuration.presets.count + 1)",
+                prompt: ""
+            )
+        )
+        persist()
+    }
+
+    private func update(_ preset: ConversionPromptPreset) {
+        guard let index = configuration.presets.firstIndex(where: { $0.id == preset.id }) else {
+            return
+        }
+        configuration.presets[index] = preset
+        persist()
+    }
+
+    private func delete(at offsets: IndexSet) {
+        let deletedIDs = offsets.map { configuration.presets[$0].id }
+        configuration.presets.remove(atOffsets: offsets)
+        if let activePresetID = configuration.activePresetID, deletedIDs.contains(activePresetID) {
+            configuration.activePresetID = nil
+        }
+        persist()
+    }
+
+    private func persist() {
+        try? SharedSettingsStore()?.saveConversionPromptConfiguration(configuration)
+        onSave(configuration)
+    }
+}
+
+private struct ConversionPromptPresetEditor: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private struct Example: Identifiable {
+        let title: String
+        let prompt: String
+        var id: String { title }
+    }
+
+    private static let maximumCharacterCount = 1_000
+    private static let examples = [
+        Example(
+            title: "標準に戻す",
+            prompt: ""
+        ),
+        Example(
+            title: "中国語（簡体字）",
+            prompt: "入力内容の意味を保ったまま、自然な中国語（簡体字）に翻訳してください。"
+        ),
+        Example(
+            title: "韓国語",
+            prompt: "入力内容の意味を保ったまま、自然な韓国語に翻訳してください。"
+        ),
+        Example(
+            title: "英語",
+            prompt: "入力内容の意味を保ったまま、自然な英語に翻訳してください。"
+        ),
+        Example(
+            title: "論文スタイル",
+            prompt: "入力内容の意味を変えず、句読点を日本語の論文で用いられる全角の「，」「．」に統一してください。"
+        ),
+    ]
+
+    let initialPreset: ConversionPromptPreset
+    let onSave: (ConversionPromptPreset) -> Void
+
+    @State private var name: String
+    @State private var text: String
+    @State private var showsDiscardConfirmation = false
+    @State private var showsExampleReplacementConfirmation = false
+    @State private var pendingExample: Example?
+    @State private var testSource = "ashita made ni kakunin shite kudasai."
+    @State private var resultWithoutPrompt = ""
+    @State private var resultWithPrompt = ""
+    @State private var testMessage = ""
+    @State private var isTesting = false
+
+    init(initialPreset: ConversionPromptPreset, onSave: @escaping (ConversionPromptPreset) -> Void) {
+        self.initialPreset = initialPreset
+        self.onSave = onSave
+        _name = State(initialValue: initialPreset.name)
+        _text = State(initialValue: initialPreset.prompt)
+    }
+
+    private var hasChanges: Bool {
+        name != initialPreset.name || text != initialPreset.prompt
+    }
+    private var exceedsLimit: Bool { text.count > Self.maximumCharacterCount }
+    private var normalizedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("プリセット名", text: $name)
+                    .textInputAutocapitalization(.never)
+                    .padding(.horizontal)
+
+                Menu {
+                    ForEach(Self.examples) { example in
+                        Button(example.title) {
+                            select(example)
+                        }
+                    }
+                } label: {
+                    Label("例文から選ぶ", systemImage: "text.badge.plus")
+                }
+                .padding(.horizontal)
+
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $text)
+                        .font(.body)
+                        .frame(minHeight: 180)
+                        .padding(.horizontal, 8)
+                    if text.isEmpty {
+                        Text("AIへの追加指示を入力してください。\n例：自然な中国語（簡体字）に翻訳してください。")
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+                Text("出力言語、文体、文章の形式などを指定できます。入力内容は変換のたびに設定済みのAIサービスへ送信されます。APIキー、パスワードなどの秘密情報は入力しないでください。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+
+                Text("\(text.count)/\(Self.maximumCharacterCount)文字")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(exceedsLimit ? .red : .secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("効果を比較")
+                        .font(.headline)
+
+                    TextField("変換するローマ字", text: $testSource, axis: .vertical)
+                        .lineLimit(2 ... 4)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    Button {
+                        Task { await comparePromptEffect() }
+                    } label: {
+                        if isTesting {
+                            HStack {
+                                ProgressView()
+                                Text("比較中")
+                            }
+                        } else {
+                            Text("設定なし／ありを比較")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        isTesting
+                            || testSource.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || exceedsLimit
+                    )
+
+                    if !testMessage.isEmpty {
+                        Text(testMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+
+                    if !resultWithoutPrompt.isEmpty || !resultWithPrompt.isEmpty {
+                        comparisonResult(title: "プロンプトなし", result: resultWithoutPrompt)
+                        comparisonResult(title: "現在のプロンプトあり", result: resultWithPrompt)
+                    }
+
+                    Text("比較では同じ入力を2回送信するため、2回分のAPI利用が発生します。編集中のプロンプトを保存せずに試せます。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+        }
+        .navigationTitle("変換プロンプト")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    requestDismissal()
+                } label: {
+                    Label("戻る", systemImage: "chevron.left")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("保存") {
+                    onSave(
+                        ConversionPromptPreset(
+                            id: initialPreset.id,
+                            name: normalizedName,
+                            prompt: text
+                        )
+                    )
+                    dismiss()
+                }
+                .disabled(exceedsLimit || !hasChanges || normalizedName.isEmpty)
+            }
+        }
+        .interactiveDismissDisabled(hasChanges)
+        .confirmationDialog(
+            "現在の内容を例文で置き換えますか？",
+            isPresented: $showsExampleReplacementConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("置き換える") {
+                if let pendingExample {
+                    text = pendingExample.prompt
+                }
+                pendingExample = nil
+            }
+            Button("キャンセル", role: .cancel) {
+                pendingExample = nil
+            }
+        }
+        .confirmationDialog(
+            "変更を破棄しますか？",
+            isPresented: $showsDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("破棄", role: .destructive) { dismiss() }
+            Button("編集を続ける", role: .cancel) {}
+        } message: {
+            Text("保存していない変更があります。")
+        }
+        .onChange(of: text) { _, _ in clearComparison() }
+        .onChange(of: name) { _, _ in clearComparison() }
+        .onChange(of: testSource) { _, _ in clearComparison() }
+    }
+
+    private func comparisonResult(title: String, result: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(result)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .textSelection(.enabled)
+        }
+    }
+
+    private func select(_ example: Example) {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            text = example.prompt
+        } else {
+            pendingExample = example
+            showsExampleReplacementConfirmation = true
+        }
+    }
+
+    private func requestDismissal() {
+        if hasChanges {
+            showsDiscardConfirmation = true
+        } else {
+            dismiss()
+        }
+    }
+
+    private func clearComparison() {
+        resultWithoutPrompt = ""
+        resultWithPrompt = ""
+        testMessage = ""
+    }
+
+    @MainActor
+    private func comparePromptEffect() async {
+        guard let store = SharedSettingsStore() else {
+            testMessage = "共有設定を利用できません。"
+            return
+        }
+        let configuration = store.loadProviderConfiguration()
+        guard
+            let endpointURL = URL(string: configuration.endpoint),
+            store.hasAIDataSharingConsent(for: configuration.endpoint)
+        else {
+            testMessage = "API設定と第三者AIへのデータ送信への同意を確認してください。"
+            return
+        }
+
+        isTesting = true
+        clearComparison()
+        defer { isTesting = false }
+
+        do {
+            let apiKey = try APIKeyStore().load()
+            let client = OpenAICompatibleClient(
+                configuration: OpenAICompatibleConfiguration(
+                    endpoint: endpointURL,
+                    model: configuration.model,
+                    apiKey: apiKey
+                )
+            )
+            let dictionary = store.loadUserDictionary()
+            async let baseline = client.convert(
+                ConversionRequest(source: testSource, userDictionary: dictionary)
+            )
+            async let customized = client.convert(
+                ConversionRequest(
+                    source: testSource,
+                    userDictionary: dictionary,
+                    customSystemPrompt: text
+                )
+            )
+            let (baselineResponse, customizedResponse) = try await (baseline, customized)
+            resultWithoutPrompt = baselineResponse.candidates.first ?? "候補がありません。"
+            resultWithPrompt = customizedResponse.candidates.first ?? "候補がありません。"
+            if let usage = baselineResponse.usage {
+                store.recordUsage(usage, model: baselineResponse.model ?? configuration.model)
+            }
+            if let usage = customizedResponse.usage {
+                store.recordUsage(usage, model: customizedResponse.model ?? configuration.model)
+            }
+        } catch {
+            testMessage = "比較に失敗しました。API設定や通信状態を確認してください。"
         }
     }
 }
