@@ -702,7 +702,7 @@ private struct ConversionPromptPresetEditor: View {
         ),
         Example(
             title: "論文スタイル",
-            prompt: "入力内容の意味を変えず、句読点を日本語の論文で用いられる全角の「，」「．」に統一してください。"
+            prompt: "入力内容の意味を変えず、出力中の句読点を必ず日本語の論文で用いられる全角の「，」「．」に統一してください。「、」「。」および半角の「,」「.」は使用せず、それぞれ「，」「．」に置き換えてください。"
         ),
     ]
 
@@ -714,7 +714,7 @@ private struct ConversionPromptPresetEditor: View {
     @State private var showsDiscardConfirmation = false
     @State private var showsExampleReplacementConfirmation = false
     @State private var pendingExample: Example?
-    @State private var testSource = "ashita made ni kakunin shite kudasai."
+    @State private var testSource = "ashita made ni kakunin shi, kekka wo houkoku shite kudasai."
     @State private var resultWithoutPrompt = ""
     @State private var resultWithPrompt = ""
     @State private var testMessage = ""
@@ -889,7 +889,8 @@ private struct ConversionPromptPresetEditor: View {
             Text(title)
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            Text(result)
+            Text("「\(result)」")
+                .font(.body.monospaced())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
                 .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
