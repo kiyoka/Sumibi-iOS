@@ -1875,7 +1875,8 @@ final class KeyboardViewController: UIInputViewController {
         let request = ConversionRequest(
             source: snapshot.source,
             surroundingContext: snapshot.contextBefore,
-            userDictionary: sharedSettings?.loadUserDictionary() ?? ""
+            userDictionary: sharedSettings?.loadUserDictionary() ?? "",
+            customSystemPrompt: sharedSettings?.loadCustomSystemPrompt() ?? ""
         )
         conversionTask = Task { [weak self, conversionClient] in
             do {
@@ -1993,7 +1994,8 @@ final class KeyboardViewController: UIInputViewController {
         let request = ConversionRequest(
             source: snapshot.source,
             surroundingContext: surroundingContext,
-            userDictionary: sharedSettings?.loadUserDictionary() ?? ""
+            userDictionary: sharedSettings?.loadUserDictionary() ?? "",
+            customSystemPrompt: sharedSettings?.loadCustomSystemPrompt() ?? ""
         )
         conversionTask = Task { [weak self, conversionClient] in
             do {
@@ -2051,7 +2053,8 @@ final class KeyboardViewController: UIInputViewController {
             surroundingContext: session.surroundingContext,
             mode: .additional,
             currentConversion: session.current,
-            userDictionary: sharedSettings?.loadUserDictionary() ?? ""
+            userDictionary: sharedSettings?.loadUserDictionary() ?? "",
+            customSystemPrompt: sharedSettings?.loadCustomSystemPrompt() ?? ""
         )
         conversionTask = Task { [weak self, conversionClient] in
             do {

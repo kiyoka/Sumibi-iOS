@@ -6,19 +6,22 @@ public struct ConversionRequest: Equatable, Sendable {
     public let mode: ConversionCandidateMode
     public let currentConversion: String?
     public let userDictionary: String
+    public let customSystemPrompt: String
 
     public init(
         source: String,
         surroundingContext: String = "",
         mode: ConversionCandidateMode = .primary,
         currentConversion: String? = nil,
-        userDictionary: String = ""
+        userDictionary: String = "",
+        customSystemPrompt: String = ""
     ) {
         self.source = source
         self.surroundingContext = surroundingContext
         self.mode = mode
         self.currentConversion = currentConversion
         self.userDictionary = userDictionary
+        self.customSystemPrompt = customSystemPrompt
     }
 }
 
