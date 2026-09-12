@@ -7,6 +7,70 @@ private final class AudioFeedbackInputView: UIInputView, UIInputViewAudioFeedbac
     }
 }
 
+private final class EmberGlassSurfaceView: UIView {
+    private let effectView: UIVisualEffectView
+    private let highlightLayer = CAGradientLayer()
+
+    init(tintColor: UIColor, interactive: Bool) {
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect(style: .regular)
+            glass.tintColor = tintColor
+            glass.isInteractive = interactive
+            effectView = UIVisualEffectView(effect: glass)
+        } else {
+            effectView = UIVisualEffectView(effect: nil)
+        }
+        super.init(frame: .zero)
+
+        isUserInteractionEnabled = false
+        accessibilityElementsHidden = true
+        layer.cornerCurve = .continuous
+        layer.borderWidth = 0.8
+        effectView.isUserInteractionEnabled = false
+        effectView.tintColor = tintColor
+        tintAdjustmentMode = .normal
+        self.tintColor = tintColor
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(effectView)
+        NSLayoutConstraint.activate([
+            effectView.topAnchor.constraint(equalTo: topAnchor),
+            effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+
+        highlightLayer.colors = [
+            UIColor.white.withAlphaComponent(0.70).cgColor,
+            UIColor.white.withAlphaComponent(0.12).cgColor,
+            UIColor.clear.cgColor,
+            UIColor.white.withAlphaComponent(0.20).cgColor,
+        ]
+        highlightLayer.locations = [0, 0.18, 0.58, 1]
+        highlightLayer.startPoint = CGPoint(x: 0.05, y: 0)
+        highlightLayer.endPoint = CGPoint(x: 0.95, y: 1)
+        layer.addSublayer(highlightLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let radius = min(bounds.height / 2, 15)
+        layer.cornerRadius = radius
+        effectView.layer.cornerCurve = .continuous
+        effectView.layer.cornerRadius = radius
+        effectView.clipsToBounds = true
+        highlightLayer.frame = bounds
+        highlightLayer.cornerRadius = radius
+        layer.borderColor = UIColor.white.withAlphaComponent(0.48)
+            .resolvedColor(with: traitCollection)
+            .cgColor
+    }
+}
+
 final class KeyboardViewController: UIInputViewController {
     private enum LayoutMetrics {
         static let keyHorizontalInset: CGFloat = 2
@@ -36,6 +100,13 @@ final class KeyboardViewController: UIInputViewController {
     private enum KeyRepeatMetrics {
         static let initialDelay: TimeInterval = 0.5
         static let interval: TimeInterval = 0.075
+    }
+
+    private enum EmberGlassMetrics {
+        static let candidateAppearanceDuration: TimeInterval = 0.22
+        static let candidateAppearanceDelay: TimeInterval = 0.035
+        static let shimmerDuration: TimeInterval = 0.9
+        static let shimmerFadeOutDuration: TimeInterval = 0.36
     }
 
     private enum RepeatableKeyKind {
@@ -71,6 +142,9 @@ final class KeyboardViewController: UIInputViewController {
     private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
     private let conversionCompletionFeedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let candidateStack = UIStackView()
+    private weak var candidateBar: UIView?
+    private var candidateBarShimmerView: UIView?
+    private weak var convertButtonGlassSurface: EmberGlassSurfaceView?
     private var letterButtons: [UIButton] = []
     private var compositionTracker = CompositionTracker()
     private var pendingConversion: ConversionSnapshot?
@@ -106,6 +180,7 @@ final class KeyboardViewController: UIInputViewController {
     private var keyRepeatTimer: Timer?
     private weak var repeatingButton: UIButton?
     private var isCandidateSelectionAnimating = false
+    private var isEmberConversionActive = false
     private var isCollapsingSymbolPanel = false
     private var isSymbolPanelExpanded = false
     private var isShifted = false
@@ -139,6 +214,8 @@ final class KeyboardViewController: UIInputViewController {
         retrySnapshot = nil
         retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
+        isEmberConversionActive = false
+        stopCandidateBarShimmer()
         refreshConvertButton()
     }
 
@@ -155,6 +232,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateKeyboardHeight()
+        layoutCandidateBarShimmer()
     }
 
     private func configureKeyboard() {
@@ -209,6 +287,7 @@ final class KeyboardViewController: UIInputViewController {
             constant: -8
         )
         self.candidateBarHeightConstraint = candidateBarHeightConstraint
+        self.candidateBar = candidateBar
         self.candidateBarBottomSpacingConstraint = candidateBarBottomSpacingConstraint
         self.keyRowsHeightConstraint = keyRowsHeightConstraint
         self.keyRowsBottomConstraint = keyRowsBottomConstraint
@@ -1013,12 +1092,27 @@ final class KeyboardViewController: UIInputViewController {
         accessibilityLabel: String,
         action: Selector
     ) {
-        var configuration = UIButton.Configuration.gray()
+        var configuration: UIButton.Configuration
+        if #available(iOS 26.0, *) {
+            configuration = .plain()
+        } else {
+            configuration = .gray()
+        }
         configuration.title = title
         configuration.baseForegroundColor = .label
         configuration.cornerStyle = .capsule
+        if #available(iOS 26.0, *) {
+            styleGlassButtonConfiguration(&configuration)
+        }
 
         let button = UIButton(configuration: configuration)
+        if #available(iOS 26.0, *) {
+            installGlassSurface(
+                in: button,
+                tintColor: UIColor.systemOrange.withAlphaComponent(0.16),
+                interactive: false
+            )
+        }
         configureCandidateButtonSizing(button)
         button.accessibilityLabel = accessibilityLabel
         button.addTarget(self, action: action, for: .touchUpInside)
@@ -1050,7 +1144,7 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func showCandidates() {
+    private func showCandidates(animated: Bool = false) {
         guard let session = candidateSession else {
             showCandidateMessage("候補がありません")
             return
@@ -1078,13 +1172,31 @@ final class KeyboardViewController: UIInputViewController {
                 action: #selector(additionalCandidatesTapped)
             )
         }
+        var candidateButtons: [UIButton] = []
         for (index, option) in session.options.enumerated() {
-            var configuration = UIButton.Configuration.gray()
+            var configuration: UIButton.Configuration
+            if #available(iOS 26.0, *) {
+                configuration = .plain()
+            } else {
+                configuration = .gray()
+            }
             configuration.title = option == session.original ? "原文" : option
             configuration.baseForegroundColor = .label
             configuration.cornerStyle = .capsule
+            if #available(iOS 26.0, *) {
+                styleGlassButtonConfiguration(&configuration)
+            }
 
             let button = UIButton(configuration: configuration)
+            if #available(iOS 26.0, *) {
+                installGlassSurface(
+                    in: button,
+                    tintColor: option == session.current
+                        ? UIColor.systemOrange.withAlphaComponent(0.30)
+                        : UIColor.systemOrange.withAlphaComponent(0.14),
+                    interactive: true
+                )
+            }
             configureCandidateButtonSizing(button)
             button.tag = index
             button.accessibilityLabel = option == session.original
@@ -1093,6 +1205,66 @@ final class KeyboardViewController: UIInputViewController {
             button.isSelected = option == session.current
             button.addTarget(self, action: #selector(candidateTapped), for: .touchUpInside)
             candidateStack.addArrangedSubview(button)
+            candidateButtons.append(button)
+        }
+        if animated {
+            animateCandidateAppearance(candidateButtons)
+        }
+    }
+
+    private func styleGlassButtonConfiguration(_ configuration: inout UIButton.Configuration) {
+        configuration.baseBackgroundColor = .clear
+        configuration.background.backgroundColor = .clear
+        configuration.background.visualEffect = nil
+        configuration.background.strokeColor = nil
+        configuration.background.strokeWidth = 0
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 7,
+            leading: 13,
+            bottom: 7,
+            trailing: 13
+        )
+    }
+
+    @discardableResult
+    private func installGlassSurface(
+        in button: UIButton,
+        tintColor: UIColor,
+        interactive: Bool
+    ) -> EmberGlassSurfaceView {
+        let surface = EmberGlassSurfaceView(
+            tintColor: tintColor,
+            interactive: interactive
+        )
+        surface.translatesAutoresizingMaskIntoConstraints = false
+        button.insertSubview(surface, at: 0)
+        NSLayoutConstraint.activate([
+            surface.topAnchor.constraint(equalTo: button.topAnchor),
+            surface.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+            surface.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+            surface.bottomAnchor.constraint(equalTo: button.bottomAnchor),
+        ])
+        return surface
+    }
+
+    private func animateCandidateAppearance(_ buttons: [UIButton]) {
+        guard #available(iOS 26.0, *), !UIAccessibility.isReduceMotionEnabled else {
+            return
+        }
+        for (index, button) in buttons.enumerated() {
+            button.alpha = 0.25
+            button.transform = CGAffineTransform(translationX: -8, y: 0)
+                .scaledBy(x: 0.84, y: 0.84)
+            UIView.animate(
+                withDuration: EmberGlassMetrics.candidateAppearanceDuration,
+                delay: Double(index) * EmberGlassMetrics.candidateAppearanceDelay,
+                usingSpringWithDamping: 0.72,
+                initialSpringVelocity: 0.45,
+                options: [.allowUserInteraction, .beginFromCurrentState]
+            ) {
+                button.alpha = 1
+                button.transform = .identity
+            }
         }
     }
 
@@ -1106,6 +1278,8 @@ final class KeyboardViewController: UIInputViewController {
         retrySnapshot = nil
         retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
+        isEmberConversionActive = false
+        stopCandidateBarShimmer()
         showCandidateMessage("入力中")
     }
 
@@ -1166,7 +1340,9 @@ final class KeyboardViewController: UIInputViewController {
         compositionLength: Int
     ) {
         let emberLevel: Int
-        if hasSelectedText {
+        if isEmberConversionActive {
+            emberLevel = -3
+        } else if hasSelectedText {
             emberLevel = -2
         } else {
             switch compositionLength {
@@ -1190,6 +1366,9 @@ final class KeyboardViewController: UIInputViewController {
         let backgroundColor: UIColor
         let foregroundColor: UIColor
         switch emberLevel {
+        case -3:
+            backgroundColor = .systemOrange
+            foregroundColor = .black
         case -2:
             backgroundColor = .systemBlue
             foregroundColor = .white
@@ -1212,6 +1391,146 @@ final class KeyboardViewController: UIInputViewController {
 
         convertButton?.configuration?.baseBackgroundColor = backgroundColor
         convertButton?.configuration?.baseForegroundColor = foregroundColor
+        convertButton?.tintAdjustmentMode = .normal
+        convertButton?.tintColor = backgroundColor
+        updateConvertButtonGlass(isActive: emberLevel == -3)
+    }
+
+    private func updateConvertButtonGlass(isActive: Bool) {
+        guard let convertButton, var configuration = convertButton.configuration else {
+            return
+        }
+        if isActive {
+            if #available(iOS 26.0, *) {
+                convertButton.tintColor = .systemOrange
+                configuration.baseBackgroundColor = .clear
+                configuration.background.backgroundColor = .clear
+                configuration.background.visualEffect = nil
+                configuration.background.strokeColor = nil
+                configuration.background.strokeWidth = 0
+                if convertButtonGlassSurface == nil {
+                    convertButtonGlassSurface = installGlassSurface(
+                        in: convertButton,
+                        tintColor: UIColor.systemOrange.withAlphaComponent(0.42),
+                        interactive: true
+                    )
+                }
+            }
+        } else {
+            convertButtonGlassSurface?.removeFromSuperview()
+            configuration.background.visualEffect = nil
+            configuration.background.backgroundColor = nil
+            configuration.background.strokeColor = nil
+            configuration.background.strokeWidth = 0
+        }
+        convertButton.configuration = configuration
+    }
+
+    private func beginEmberConversionAnimation() {
+        guard #available(iOS 26.0, *) else {
+            isEmberConversionActive = false
+            refreshConvertButton()
+            return
+        }
+        isEmberConversionActive = true
+        convertButtonEmberLevel = Int.min
+        refreshConvertButton()
+        startCandidateBarShimmer()
+    }
+
+    private func endEmberConversionAnimation(success: Bool) {
+        isEmberConversionActive = false
+        convertButtonEmberLevel = Int.min
+        refreshConvertButton()
+        if success {
+            fadeOutCandidateBarShimmer()
+        } else {
+            stopCandidateBarShimmer()
+        }
+    }
+
+    private func startCandidateBarShimmer() {
+        guard #available(iOS 26.0, *),
+              !UIAccessibility.isReduceMotionEnabled,
+              let candidateBar else {
+            stopCandidateBarShimmer()
+            return
+        }
+        stopCandidateBarShimmer()
+
+        let shimmer = UIView(frame: .zero)
+        shimmer.isUserInteractionEnabled = false
+        shimmer.accessibilityElementsHidden = true
+        let gradient = CAGradientLayer()
+        gradient.colors = [
+            UIColor.clear.cgColor,
+            UIColor.systemOrange.withAlphaComponent(0.18).cgColor,
+            UIColor.white.withAlphaComponent(0.52).cgColor,
+            UIColor.systemOrange.withAlphaComponent(0.18).cgColor,
+            UIColor.clear.cgColor,
+        ]
+        gradient.locations = [0, 0.28, 0.5, 0.72, 1]
+        gradient.startPoint = CGPoint(x: 0, y: 0.5)
+        gradient.endPoint = CGPoint(x: 1, y: 0.5)
+        shimmer.layer.addSublayer(gradient)
+        candidateBar.addSubview(shimmer)
+        candidateBar.bringSubviewToFront(shimmer)
+        candidateBarShimmerView = shimmer
+        layoutCandidateBarShimmer()
+
+        let travel = CABasicAnimation(keyPath: "transform.translation.x")
+        travel.fromValue = -candidateBar.bounds.width * 0.75
+        travel.toValue = candidateBar.bounds.width * 1.35
+        travel.duration = EmberGlassMetrics.shimmerDuration
+        travel.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0]
+        fade.keyTimes = [0, 0.76, 1]
+        fade.timingFunctions = [
+            CAMediaTimingFunction(name: .linear),
+            CAMediaTimingFunction(name: .easeIn),
+        ]
+
+        let sweep = CAAnimationGroup()
+        sweep.animations = [travel, fade]
+        sweep.duration = EmberGlassMetrics.shimmerDuration
+        sweep.repeatCount = .infinity
+        gradient.add(sweep, forKey: "sumibi.ember-glass-shimmer")
+    }
+
+    private func fadeOutCandidateBarShimmer() {
+        guard let shimmer = candidateBarShimmerView else {
+            return
+        }
+        UIView.animate(
+            withDuration: EmberGlassMetrics.shimmerFadeOutDuration,
+            delay: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]
+        ) {
+            shimmer.alpha = 0
+        } completion: { [weak self, weak shimmer] _ in
+            guard self?.candidateBarShimmerView === shimmer else {
+                return
+            }
+            self?.stopCandidateBarShimmer()
+        }
+    }
+
+    private func layoutCandidateBarShimmer() {
+        guard let candidateBar, let shimmer = candidateBarShimmerView else {
+            return
+        }
+        let width = max(candidateBar.bounds.width * 0.48, 96)
+        shimmer.frame = CGRect(x: 0, y: 0, width: width, height: candidateBar.bounds.height)
+        shimmer.layer.sublayers?.first?.frame = shimmer.bounds
+    }
+
+    private func stopCandidateBarShimmer() {
+        candidateBarShimmerView?.layer.sublayers?.forEach { $0.removeAllAnimations() }
+        candidateBarShimmerView?.layer.removeAllAnimations()
+        candidateBarShimmerView?.removeFromSuperview()
+        candidateBarShimmerView = nil
     }
 
     private func replaceHostText(_ current: String, with replacement: String) {
@@ -1245,9 +1564,9 @@ final class KeyboardViewController: UIInputViewController {
                 .prefix(ConversionCandidateMode.primary.candidateCount)
         )
         guard let firstCandidate = candidates.first else {
+            endEmberConversionAnimation(success: false)
             pendingConversion = nil
             showCandidateMessage("変換候補がありません")
-            refreshConvertButton()
             return
         }
 
@@ -1257,10 +1576,10 @@ final class KeyboardViewController: UIInputViewController {
                 documentContextBeforeInput: textDocumentProxy.documentContextBeforeInput
             )
         else {
+            endEmberConversionAnimation(success: false)
             compositionTracker.invalidate()
             pendingConversion = nil
             showCandidateMessage("入力内容が変更されたため置換しません")
-            refreshConvertButton()
             return
         }
 
@@ -1284,8 +1603,8 @@ final class KeyboardViewController: UIInputViewController {
         additionalCandidateErrorMessage = nil
         pendingConversion = nil
         compositionTracker.reset()
-        showCandidates()
-        refreshConvertButton()
+        showCandidates(animated: true)
+        endEmberConversionAnimation(success: true)
         playConversionCompletionFeedback()
     }
 
@@ -1300,10 +1619,10 @@ final class KeyboardViewController: UIInputViewController {
         activeRequestID = nil
         conversionTask = nil
         pendingConversion = nil
+        endEmberConversionAnimation(success: false)
         let presentation = errorPresentation(for: error)
         retrySnapshot = presentation.retryable ? snapshot : nil
         showError(presentation.message, retryable: presentation.retryable)
-        refreshConvertButton()
     }
 
     private func recordUsage(from response: ConversionResponse) {
@@ -1551,7 +1870,7 @@ final class KeyboardViewController: UIInputViewController {
         let requestID = UUID()
         activeRequestID = requestID
         showConverting()
-        refreshConvertButton()
+        beginEmberConversionAnimation()
 
         let request = ConversionRequest(
             source: snapshot.source,
@@ -1602,13 +1921,13 @@ final class KeyboardViewController: UIInputViewController {
                 .prefix(ConversionCandidateMode.primary.candidateCount)
         )
         guard let firstCandidate = candidates.first else {
+            endEmberConversionAnimation(success: false)
             showCandidateMessage("変換候補がありません")
-            refreshConvertButton()
             return
         }
         guard selectedTextMatches(snapshot) else {
+            endEmberConversionAnimation(success: false)
             showCandidateMessage("選択範囲が変更されたため置換しません")
-            refreshConvertButton()
             return
         }
 
@@ -1630,8 +1949,8 @@ final class KeyboardViewController: UIInputViewController {
             : UndoRecord(original: snapshot.source, replacement: firstCandidate)
         retrySelectedTextSnapshot = nil
         compositionTracker.reset()
-        showCandidates()
-        refreshConvertButton()
+        showCandidates(animated: true)
+        endEmberConversionAnimation(success: true)
         playConversionCompletionFeedback()
     }
 
@@ -1645,10 +1964,10 @@ final class KeyboardViewController: UIInputViewController {
         }
         activeRequestID = nil
         conversionTask = nil
+        endEmberConversionAnimation(success: false)
         let presentation = errorPresentation(for: error)
         retrySelectedTextSnapshot = presentation.retryable ? snapshot : nil
         showError(presentation.message, retryable: presentation.retryable)
-        refreshConvertButton()
     }
 
     private func startConversion(_ snapshot: ConversionSnapshot) {
@@ -1665,7 +1984,7 @@ final class KeyboardViewController: UIInputViewController {
         let requestID = UUID()
         activeRequestID = requestID
         showConverting()
-        refreshConvertButton()
+        beginEmberConversionAnimation()
 
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput ?? ""
         let surroundingContext = contextBeforeInput.hasSuffix(snapshot.textToReplace)
@@ -1725,7 +2044,7 @@ final class KeyboardViewController: UIInputViewController {
         let requestID = UUID()
         activeRequestID = requestID
         showCandidateMessage("追加候補を取得中…", showsProgress: true)
-        refreshConvertButton()
+        beginEmberConversionAnimation()
 
         let request = ConversionRequest(
             source: session.original,
@@ -1758,7 +2077,7 @@ final class KeyboardViewController: UIInputViewController {
         conversionTask = nil
 
         guard var session = candidateSession else {
-            refreshConvertButton()
+            endEmberConversionAnimation(success: false)
             return
         }
         let expectedSuffix = String(session.current.suffix(32))
@@ -1766,10 +2085,10 @@ final class KeyboardViewController: UIInputViewController {
             !expectedSuffix.isEmpty,
             textDocumentProxy.documentContextBeforeInput?.hasSuffix(expectedSuffix) == true
         else {
+            endEmberConversionAnimation(success: false)
             candidateSession = nil
             undoRecord = nil
             showCandidateMessage("入力内容が変更されたため追加候補を表示しません")
-            refreshConvertButton()
             return
         }
 
@@ -1787,9 +2106,9 @@ final class KeyboardViewController: UIInputViewController {
             options.append(candidate)
         }
         guard options.count > 1 else {
+            endEmberConversionAnimation(success: false)
             additionalCandidateErrorMessage = "追加候補を取得できませんでした"
             showCandidates()
-            refreshConvertButton()
             return
         }
 
@@ -1799,8 +2118,8 @@ final class KeyboardViewController: UIInputViewController {
         session.options = options
         candidateSession = session
         additionalCandidateErrorMessage = nil
-        showCandidates()
-        refreshConvertButton()
+        showCandidates(animated: true)
+        endEmberConversionAnimation(success: true)
         playConversionCompletionFeedback()
     }
 
@@ -1828,10 +2147,10 @@ final class KeyboardViewController: UIInputViewController {
         }
         activeRequestID = nil
         conversionTask = nil
+        endEmberConversionAnimation(success: false)
         let presentation = errorPresentation(for: error)
         additionalCandidateErrorMessage = presentation.message
         showCandidates()
-        refreshConvertButton()
     }
 
     @objc private func cancelTapped() {
@@ -1844,8 +2163,8 @@ final class KeyboardViewController: UIInputViewController {
         pendingConversion = nil
         retrySnapshot = nil
         retrySelectedTextSnapshot = nil
+        endEmberConversionAnimation(success: false)
         showCandidateMessage("変換をキャンセルしました")
-        refreshConvertButton()
     }
 
     @objc private func retryTapped() {
