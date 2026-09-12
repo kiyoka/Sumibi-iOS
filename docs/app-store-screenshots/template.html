@@ -159,6 +159,17 @@
       border-radius: 82px;
       pointer-events: none;
     }
+
+    .lang-en h1 {
+      font-size: 82px;
+      line-height: 1.16;
+      letter-spacing: -.035em;
+    }
+
+    .lang-en .supporting {
+      font-size: 38px;
+      line-height: 1.48;
+    }
   </style>
 </head>
 <body>
@@ -187,7 +198,7 @@
   </main>
 
   <script>
-    const slides = [
+    const jaSlides = [
       {
         headline: 'ローマ字の文章を、\n<span class="accent">自然な日本語</span>へ',
         supporting: '入力して「変換」を押すだけ。\n文章全体をAIが整えます。',
@@ -204,10 +215,24 @@
       },
       {
         headline: '候補から、\n<span class="accent">好みの表現</span>を選択',
-        supporting: '言い回しを選び直したり、\nUndoで原文へ戻したりできます。',
+        supporting: '同じ読みの候補を見渡し、\n意図に合う表現を選べます。',
         capture: 'captures/03-candidates.png',
         placeholderTitle: '候補バーを撮影',
-        placeholderDetail: '複数候補と「↶ Undo」が\n同時に見える状態を使用'
+        placeholderDetail: 'osameru の追加候補を取得\n収める・納める・治める・修めるを表示'
+      },
+      {
+        headline: '選んだ範囲だけを\n<span class="accent">AI変換</span>',
+        supporting: '英文はそのまま残して、\n選択したローマ字だけを変換できます。',
+        capture: 'captures/04-range-conversion.png',
+        placeholderTitle: '範囲変換を撮影',
+        placeholderDetail: '英文中のローマ字部分を選択\n「範囲を変換」キーも表示'
+      },
+      {
+        headline: '出力言語をプリセットで\n<span class="accent">切り替え</span>',
+        supporting: '追加指示を保存して、\n用途に合わせた変換を試せます。',
+        capture: 'captures/05-writing-style-preset.png',
+        placeholderTitle: 'プリセット比較を撮影',
+        placeholderDetail: '韓国語プリセットを選択し\n設定なし／ありの比較結果を表示'
       },
       {
         headline: '記号一覧も、\n<span class="accent">ワンタップ</span>で',
@@ -215,22 +240,58 @@
         capture: 'captures/06-symbol-panel.png',
         placeholderTitle: '記号一覧を撮影',
         placeholderDetail: '「記号」をタップしてパネルを展開\n記号3段とQWERTYを同時に表示'
-      },
-      {
-        headline: '固有名詞を\n<span class="accent">ユーザー辞書</span>に登録',
-        supporting: '製品名などの表記を、\n指定した形で候補へ反映します。',
-        capture: 'captures/04-user-dictionary.png',
-        placeholderTitle: 'ユーザー辞書を撮影',
-        placeholderDetail: 'sumibi = Sumibi\nopenai = OpenAI'
-      },
-      {
-        headline: '送信先を確認してから\n<span class="accent">AI変換</span>',
-        supporting: '明示的に同意した場合だけ、\n変換に必要なデータを送信します。',
-        capture: 'captures/05-privacy-consent.png',
-        placeholderTitle: 'プライバシー欄を撮影',
-        placeholderDetail: '送信先・同意スイッチ・\n送信内容の説明を表示'
       }
     ];
+
+    const enSlides = [
+      {
+        headline: 'Turn romaji into\n<span class="accent">natural Japanese</span>',
+        supporting: 'Type in romaji and tap Convert.\nAI reshapes it into natural Japanese.',
+        capture: 'captures/01-natural-japanese.png',
+        placeholderTitle: 'Capture the converted result',
+        placeholderDetail: 'Notes + Sumibi keyboard\nShow the natural Japanese output'
+      },
+      {
+        headline: 'One <span class="accent">QWERTY layout</span>\nfor English and Japanese',
+        supporting: 'Enter both languages without\nswitching keyboard layouts.',
+        capture: 'captures/02-qwerty-input.png',
+        placeholderTitle: 'Capture romaji input',
+        placeholderDetail: 'Show the number row, QWERTY keys,\nand the Convert key'
+      },
+      {
+        headline: 'Choose the expression\nyou <span class="accent">mean</span>',
+        supporting: 'See homophones at a glance\nand pick the one that fits.',
+        capture: 'captures/03-candidates.png',
+        placeholderTitle: 'Capture conversion candidates',
+        placeholderDetail: 'Show multiple osameru candidates\nin the candidate bar'
+      },
+      {
+        headline: 'Convert only\nthe text <span class="accent">you select</span>',
+        supporting: 'Keep the English text and convert\nonly the selected romaji.',
+        capture: 'captures/04-range-conversion.png',
+        placeholderTitle: 'Capture selected-text conversion',
+        placeholderDetail: 'Select romaji inside an English sentence\nand show the range conversion key'
+      },
+      {
+        headline: 'Switch output languages\nwith <span class="accent">presets</span>',
+        supporting: 'Save extra instructions and compare\nthe result before using them.',
+        capture: 'captures/05-writing-style-preset.png',
+        placeholderTitle: 'Capture a preset comparison',
+        placeholderDetail: 'Compare the default output\nwith the Korean preset'
+      },
+      {
+        headline: '<span class="accent">Symbols</span>,\none tap away',
+        supporting: 'Open three rows of common symbols\nwithout leaving QWERTY.',
+        capture: 'captures/06-symbol-panel.png',
+        placeholderTitle: 'Capture the symbol panel',
+        placeholderDetail: 'Show three symbol rows\ntogether with the QWERTY keys'
+      }
+    ];
+
+    const locale = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'ja';
+    const slides = locale === 'en' ? enSlides : jaSlides;
+    document.documentElement.lang = locale;
+    document.body.classList.toggle('lang-en', locale === 'en');
 
     const requested = Number(new URLSearchParams(location.search).get('slide') || '1');
     const index = Math.min(Math.max(requested, 1), slides.length) - 1;

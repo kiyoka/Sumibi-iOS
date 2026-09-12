@@ -35,13 +35,19 @@ Setup and test
 6. Tap “↶ Undo” to restore the original text.
 7. If a globe button is shown, tap it to move to the next keyboard. iOS may instead provide the keyboard-switching control outside the extension.
 
+Writing-style presets
+1. Return to Sumibi and open “文体プリセット”.
+2. Add a preset, open it, and select an example such as “論文スタイル”.
+3. Under “効果を比較”, tap “設定なし／ありを比較” to compare the same input twice. This comparison sends two API requests and records both token usages.
+4. Save the preset and select it under “使用するプリセット”. The active prompt is then applied to conversions in the app and keyboard.
+
 User dictionary
 1. Return to Sumibi and open “ユーザー辞書”.
 2. Enter “sumibi = Sumibi” and save it.
 3. Return to Notes, type “sumibi”, and tap “変換”. Confirm that “Sumibi” is offered while preserving its capitalization.
 
 Privacy and operation without Full Access
-AI data is sent only after the reviewer explicitly enables the consent switch and taps the conversion button. The conversion text, the minimum surrounding context needed for conversion, and the complete registered user dictionary are sent to the displayed third-party API endpoint. The developer’s server is not used. The API key is stored in the device Keychain. Consent can be withdrawn in the app.
+AI data is sent only after the reviewer explicitly enables the consent switch and taps the conversion button. The conversion text, the minimum surrounding context needed for conversion, the complete registered user dictionary, and the active writing-style prompt are sent to the displayed third-party API endpoint. The developer’s server is not used. The API key is stored in the device Keychain. Consent can be withdrawn in the app.
 
 With Full Access disabled, ordinary QWERTY character input, delete, space, return, symbols, and switching to the next keyboard remain available. AI conversion does not send data and displays a message that Full Access is required.
 
@@ -61,6 +67,7 @@ If the review API is temporarily unavailable, please retry the in-app conversion
 - 同意OFFではアプリとキーボードのどちらからもAIへ送信しない
 - 同意ONかつフルアクセスONで、キーボードから変換、候補選択、Undoが動く
 - `sumibi = Sumibi`を登録し、辞書の指定表記が候補へ反映される
+- 文体プリセットを追加し、設定なし／ありの比較とキーボードへの反映を確認する
 - APIキーを含まない状態でGit差分と提出用スクリーンショットを確認する
 - App Store Connectの連絡先、プライバシーポリシーURL、サポートURLが有効である
 - 提出直前にReview Notesのプレースホルダーを審査専用APIキーへ置き換える
