@@ -71,6 +71,70 @@ private final class EmberGlassSurfaceView: UIView {
     }
 }
 
+private final class HorizontalCandidateStripView: UIView, UIGestureRecognizerDelegate {
+    private let contentView: UIView
+    private var contentLeadingConstraint: NSLayoutConstraint!
+    private var panStartOffset: CGFloat = 0
+
+    init(contentView: UIView) {
+        self.contentView = contentView
+        super.init(frame: .zero)
+
+        clipsToBounds = true
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentView)
+        contentLeadingConstraint = contentView.leadingAnchor.constraint(equalTo: leadingAnchor)
+        NSLayoutConstraint.activate([
+            contentLeadingConstraint,
+            contentView.topAnchor.constraint(equalTo: topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        panGesture.delegate = self
+        addGestureRecognizer(panGesture)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateOffset(contentLeadingConstraint.constant)
+    }
+
+    func resetOffset() {
+        contentLeadingConstraint.constant = 0
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else {
+            return true
+        }
+        let velocity = panGesture.velocity(in: self)
+        return contentView.bounds.width > bounds.width && abs(velocity.x) > abs(velocity.y)
+    }
+
+    @objc private func handlePan(_ gestureRecognizer: UIPanGestureRecognizer) {
+        switch gestureRecognizer.state {
+        case .began:
+            panStartOffset = contentLeadingConstraint.constant
+        case .changed, .ended, .cancelled:
+            let translation = gestureRecognizer.translation(in: self)
+            updateOffset(panStartOffset + translation.x)
+        default:
+            break
+        }
+    }
+
+    private func updateOffset(_ proposedOffset: CGFloat) {
+        let minimumOffset = min(0, bounds.width - contentView.bounds.width)
+        contentLeadingConstraint.constant = min(0, max(minimumOffset, proposedOffset))
+    }
+}
+
 final class KeyboardViewController: UIInputViewController {
     private enum LayoutMetrics {
         static let keyHorizontalInset: CGFloat = 2
@@ -142,7 +206,9 @@ final class KeyboardViewController: UIInputViewController {
     private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
     private let conversionCompletionFeedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let candidateStack = UIStackView()
+    private let candidateMessageStack = UIStackView()
     private weak var candidateBar: UIView?
+    private weak var candidateStripView: HorizontalCandidateStripView?
     private var candidateBarShimmerView: UIView?
     private weak var convertButtonGlassSurface: EmberGlassSurfaceView?
     private var letterButtons: [UIButton] = []
@@ -395,32 +461,43 @@ final class KeyboardViewController: UIInputViewController {
         iconView.isAccessibilityElement = false
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
-        let scrollView = UIScrollView()
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-
         candidateStack.axis = .horizontal
         candidateStack.spacing = 8
         candidateStack.alignment = .center
         candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
+        let candidateStrip = HorizontalCandidateStripView(contentView: candidateStack)
+        candidateStrip.translatesAutoresizingMaskIntoConstraints = false
+
+        candidateMessageStack.axis = .horizontal
+        candidateMessageStack.spacing = 8
+        candidateMessageStack.alignment = .center
+        candidateMessageStack.isHidden = true
+        candidateMessageStack.translatesAutoresizingMaskIntoConstraints = false
+
         container.addSubview(iconView)
-        container.addSubview(scrollView)
-        scrollView.addSubview(candidateStack)
+        container.addSubview(candidateStrip)
+        container.addSubview(candidateMessageStack)
+        candidateStripView = candidateStrip
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 6),
             iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             iconView.widthAnchor.constraint(equalToConstant: 28),
             iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
-            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
-            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
-            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            candidateStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            candidateStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            candidateStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            candidateStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            candidateStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
+            candidateStrip.topAnchor.constraint(equalTo: container.topAnchor),
+            candidateStrip.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
+            candidateStrip.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            candidateStrip.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            candidateMessageStack.topAnchor.constraint(equalTo: container.topAnchor),
+            candidateMessageStack.leadingAnchor.constraint(
+                equalTo: iconView.trailingAnchor,
+                constant: 6
+            ),
+            candidateMessageStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: container.trailingAnchor,
+                constant: -8
+            ),
+            candidateMessageStack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
         return container
     }
@@ -1069,22 +1146,33 @@ final class KeyboardViewController: UIInputViewController {
             candidateStack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
+        for view in candidateMessageStack.arrangedSubviews {
+            candidateMessageStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        candidateMessageStack.isHidden = true
+        candidateStripView?.resetOffset()
+        candidateStripView?.isHidden = false
     }
 
     private func showCandidateMessage(_ message: String, showsProgress: Bool = false) {
         clearCandidateBar()
+        candidateStripView?.isHidden = true
+        candidateMessageStack.isHidden = false
 
         if showsProgress {
             let indicator = UIActivityIndicatorView(style: .medium)
             indicator.startAnimating()
-            candidateStack.addArrangedSubview(indicator)
+            candidateMessageStack.addArrangedSubview(indicator)
         }
 
         let label = UILabel()
         label.text = message
         label.textColor = .secondaryLabel
         label.font = .systemFont(ofSize: 15)
-        candidateStack.addArrangedSubview(label)
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.8
+        candidateMessageStack.addArrangedSubview(label)
     }
 
     private func addCandidateAction(
@@ -1092,31 +1180,30 @@ final class KeyboardViewController: UIInputViewController {
         accessibilityLabel: String,
         action: Selector
     ) {
-        var configuration: UIButton.Configuration
-        if #available(iOS 26.0, *) {
-            configuration = .plain()
-        } else {
-            configuration = .gray()
-        }
-        configuration.title = title
-        configuration.baseForegroundColor = .label
-        configuration.cornerStyle = .capsule
-        if #available(iOS 26.0, *) {
-            styleGlassButtonConfiguration(&configuration)
-        }
+        let tintColor = UIColor.systemOrange.withAlphaComponent(0.16)
+        let configuration = makeCandidateButtonConfiguration(
+            title: title,
+            tintColor: tintColor
+        )
 
         let button = UIButton(configuration: configuration)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 27.0, *) {
+            // Native glass buttons keep their content outside the backdrop.
+        } else if #available(iOS 26.0, *) {
             installGlassSurface(
                 in: button,
-                tintColor: UIColor.systemOrange.withAlphaComponent(0.16),
+                tintColor: tintColor,
                 interactive: false
             )
         }
         configureCandidateButtonSizing(button)
         button.accessibilityLabel = accessibilityLabel
         button.addTarget(self, action: action, for: .touchUpInside)
-        candidateStack.addArrangedSubview(button)
+        if candidateMessageStack.isHidden {
+            candidateStack.addArrangedSubview(button)
+        } else {
+            candidateMessageStack.addArrangedSubview(button)
+        }
     }
 
     private func configureCandidateButtonSizing(_ button: UIButton) {
@@ -1174,26 +1261,22 @@ final class KeyboardViewController: UIInputViewController {
         }
         var candidateButtons: [UIButton] = []
         for (index, option) in session.options.enumerated() {
-            var configuration: UIButton.Configuration
-            if #available(iOS 26.0, *) {
-                configuration = .plain()
-            } else {
-                configuration = .gray()
-            }
-            configuration.title = option == session.original ? "原文" : option
-            configuration.baseForegroundColor = .label
-            configuration.cornerStyle = .capsule
-            if #available(iOS 26.0, *) {
-                styleGlassButtonConfiguration(&configuration)
-            }
+            let title = option == session.original ? "原文" : option
+            let tintColor = option == session.current
+                ? UIColor.systemOrange.withAlphaComponent(0.30)
+                : UIColor.systemOrange.withAlphaComponent(0.14)
+            let configuration = makeCandidateButtonConfiguration(
+                title: title,
+                tintColor: tintColor
+            )
 
             let button = UIButton(configuration: configuration)
-            if #available(iOS 26.0, *) {
+            if #available(iOS 27.0, *) {
+                // Native glass buttons keep their content outside the backdrop.
+            } else if #available(iOS 26.0, *) {
                 installGlassSurface(
                     in: button,
-                    tintColor: option == session.current
-                        ? UIColor.systemOrange.withAlphaComponent(0.30)
-                        : UIColor.systemOrange.withAlphaComponent(0.14),
+                    tintColor: tintColor,
                     interactive: true
                 )
             }
@@ -1210,6 +1293,32 @@ final class KeyboardViewController: UIInputViewController {
         if animated {
             animateCandidateAppearance(candidateButtons)
         }
+    }
+
+    private func makeCandidateButtonConfiguration(
+        title: String,
+        tintColor: UIColor
+    ) -> UIButton.Configuration {
+        var configuration: UIButton.Configuration
+        if #available(iOS 27.0, *) {
+            configuration = .glass()
+            configuration.baseBackgroundColor = tintColor
+            configuration.contentInsets = NSDirectionalEdgeInsets(
+                top: 7,
+                leading: 13,
+                bottom: 7,
+                trailing: 13
+            )
+        } else if #available(iOS 26.0, *) {
+            configuration = .plain()
+            styleGlassButtonConfiguration(&configuration)
+        } else {
+            configuration = .gray()
+        }
+        configuration.title = title
+        configuration.baseForegroundColor = .label
+        configuration.cornerStyle = .capsule
+        return configuration
     }
 
     private func styleGlassButtonConfiguration(_ configuration: inout UIButton.Configuration) {
@@ -1475,6 +1584,9 @@ final class KeyboardViewController: UIInputViewController {
         shimmer.layer.addSublayer(gradient)
         candidateBar.addSubview(shimmer)
         candidateBar.bringSubviewToFront(shimmer)
+        if !candidateMessageStack.isHidden {
+            candidateBar.bringSubviewToFront(candidateMessageStack)
+        }
         candidateBarShimmerView = shimmer
         layoutCandidateBarShimmer()
 
