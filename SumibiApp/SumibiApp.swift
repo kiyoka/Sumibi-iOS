@@ -11,6 +11,50 @@ struct SumibiApp: App {
     }
 }
 
+private enum ModelOption: String, CaseIterable, Identifiable {
+    case gpt6Sol = "gpt-6-sol"
+    case gpt6Luna = "gpt-6-luna"
+    case custom
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .gpt6Sol:
+            "GPT-6 Sol"
+        case .gpt6Luna:
+            "GPT-6 Luna"
+        case .custom:
+            "自由入力"
+        }
+    }
+
+    var summary: String? {
+        switch self {
+        case .gpt6Sol:
+            "既定・精度重視"
+        case .gpt6Luna:
+            "低コスト・高速重視"
+        case .custom:
+            nil
+        }
+    }
+
+    var pickerLabel: String {
+        guard let summary else { return displayName }
+        return "\(displayName)（\(summary)）"
+    }
+
+    var modelID: String? {
+        self == .custom ? nil : rawValue
+    }
+
+    static func selection(for model: String) -> Self {
+        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allCases.first { $0.modelID == normalizedModel } ?? .custom
+    }
+}
+
 private struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
@@ -22,6 +66,9 @@ private struct ContentView: View {
 
     @State private var endpoint = ProviderConfiguration.defaultEndpoint
     @State private var model = ProviderConfiguration.defaultModel
+    @State private var selectedModelOption = ModelOption.selection(
+        for: ProviderConfiguration.defaultModel
+    )
     @State private var apiKey = ""
     @State private var savedEndpoint = ""
     @State private var savedModel = ""
@@ -117,10 +164,33 @@ private struct ContentView: View {
                 .autocorrectionDisabled()
                 .focused($focusedAPIField, equals: .endpoint)
 
-            TextField("モデル名", text: $model)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($focusedAPIField, equals: .model)
+            Picker("モデル", selection: $selectedModelOption) {
+                ForEach(ModelOption.allCases) { option in
+                    Text(option.pickerLabel).tag(option)
+                }
+            }
+            .onChange(of: selectedModelOption) { _, newValue in
+                if let modelID = newValue.modelID {
+                    model = modelID
+                } else if ModelOption.selection(for: model) != .custom {
+                    model = ""
+                }
+            }
+            .accessibilityLabel("モデル")
+
+            if selectedModelOption == .custom {
+                TextField("モデル名を入力", text: $model)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focusedAPIField, equals: .model)
+                    .accessibilityLabel("自由入力のモデル名")
+            } else {
+                LabeledContent("モデルID") {
+                    Text(model)
+                        .monospaced()
+                        .textSelection(.enabled)
+                }
+            }
 
             SecureField(
                 hasStoredAPIKey ? "APIキー（保存済み）" : "APIキー",
@@ -140,7 +210,10 @@ private struct ContentView: View {
                 focusedAPIField = nil
                 saveSettings()
             }
-            .disabled(!hasUnsavedAPISettings)
+            .disabled(
+                !hasUnsavedAPISettings
+                    || model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
 
             if hasStoredAPIKey {
                 Button("保存したAPIキーを削除", role: .destructive) {
@@ -156,7 +229,7 @@ private struct ContentView: View {
         } header: {
             Text("API設定")
         } footer: {
-            Text("エンドポイントとモデルはApp Group、APIキーは共有Keychainへ保存します。")
+            Text("その他のOpenAI互換モデルは自由入力を選んでください。エンドポイントとモデルはApp Group、APIキーは共有Keychainへ保存します。")
         }
     }
 
@@ -437,6 +510,7 @@ private struct ContentView: View {
             let configuration = store.loadProviderConfiguration()
             endpoint = configuration.endpoint
             model = configuration.model
+            selectedModelOption = ModelOption.selection(for: configuration.model)
             savedEndpoint = configuration.endpoint
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             savedModel = configuration.model

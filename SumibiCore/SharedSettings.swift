@@ -2,7 +2,7 @@ import Foundation
 
 public struct ProviderConfiguration: Codable, Equatable, Sendable {
     public static let defaultEndpoint = "https://api.openai.com"
-    public static let defaultModel = "gpt-5.6-terra"
+    public static let defaultModel = "gpt-6-sol"
 
     public var endpoint: String
     public var model: String
@@ -52,6 +52,7 @@ public struct SharedSettingsStore {
 
     private enum Key {
         static let providerConfiguration = "providerConfiguration"
+        static let didMigrateGPT56TerraToGPT6Sol = "didMigrateGPT56TerraToGPT6Sol"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let conversionCompletionHapticEnabled = "conversionCompletionHapticEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
@@ -80,10 +81,25 @@ public struct SharedSettingsStore {
     public func loadProviderConfiguration() -> ProviderConfiguration {
         guard
             let data = defaults.data(forKey: Key.providerConfiguration),
-            let configuration = try? decoder.decode(ProviderConfiguration.self, from: data)
+            var configuration = try? decoder.decode(ProviderConfiguration.self, from: data)
         else {
+            defaults.set(true, forKey: Key.didMigrateGPT56TerraToGPT6Sol)
             return ProviderConfiguration()
         }
+
+        if !defaults.bool(forKey: Key.didMigrateGPT56TerraToGPT6Sol) {
+            let normalizedModel = configuration.model
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            if normalizedModel == "gpt-5.6-terra" {
+                configuration.model = ProviderConfiguration.defaultModel
+                if let migratedData = try? encoder.encode(configuration) {
+                    defaults.set(migratedData, forKey: Key.providerConfiguration)
+                }
+            }
+            defaults.set(true, forKey: Key.didMigrateGPT56TerraToGPT6Sol)
+        }
+
         let endpoint = configuration.endpoint
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let model = configuration.model
@@ -306,8 +322,14 @@ private struct ModelPricing {
 
     static func pricing(for model: String) -> ModelPricing? {
         let normalized = model.lowercased()
+        if normalized == "gpt-6-sol" || normalized.hasPrefix("gpt-6-sol-") {
+            return ModelPricing(input: 2, cachedInput: 0.2, output: 10)
+        }
+        if normalized == "gpt-6-luna" || normalized.hasPrefix("gpt-6-luna-") {
+            return ModelPricing(input: 0.1, cachedInput: 0.01, output: 0.5)
+        }
         if normalized == "gpt-5.6-sol" || normalized.hasPrefix("gpt-5.6-sol-") {
-            return ModelPricing(input: 5, cachedInput: 0.5, output: 30)
+            return ModelPricing(input: 4, cachedInput: 0.4, output: 20)
         }
         if normalized == "gpt-5.6-terra" || normalized.hasPrefix("gpt-5.6-terra-") {
             return ModelPricing(input: 2, cachedInput: 0.2, output: 12)
