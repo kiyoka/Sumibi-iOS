@@ -33,6 +33,15 @@ public struct OpenAICompatibleClient: ConversionClient {
     private struct ChatRequest: Encodable {
         let model: String
         let messages: [Message]
+        let reasoningEffort: String?
+        let verbosity: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case model
+            case messages
+            case reasoningEffort = "reasoning_effort"
+            case verbosity
+        }
     }
 
     private struct Message: Codable {
@@ -100,6 +109,7 @@ public struct OpenAICompatibleClient: ConversionClient {
             urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
         let candidateCount = request.mode.candidateCount
+        let modelOptions = chatRequestOptions(for: configuration.model)
         urlRequest.httpBody = try encoder.encode(
             ChatRequest(
                 model: configuration.model,
@@ -129,7 +139,9 @@ public struct OpenAICompatibleClient: ConversionClient {
                         \(request.source)
                         """
                     ),
-                ]
+                ],
+                reasoningEffort: modelOptions.reasoningEffort,
+                verbosity: modelOptions.verbosity
             )
         )
 
@@ -165,6 +177,26 @@ public struct OpenAICompatibleClient: ConversionClient {
             model: chatResponse.model ?? configuration.model,
             usage: usage
         )
+    }
+
+    private func chatRequestOptions(for model: String) -> (
+        reasoningEffort: String?,
+        verbosity: String?
+    ) {
+        let normalizedModel = model
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        if normalizedModel == "gpt-6-sol"
+            || normalizedModel == "gpt-6-luna" {
+            return (reasoningEffort: "none", verbosity: "low")
+        }
+
+        if normalizedModel == "gpt-5.6-terra" {
+            return (reasoningEffort: "none", verbosity: nil)
+        }
+
+        return (reasoningEffort: nil, verbosity: nil)
     }
 
     private func userDictionaryInstructions(for request: ConversionRequest) -> String {
