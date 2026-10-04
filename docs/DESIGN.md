@@ -467,7 +467,7 @@ HTTPエラーは、認証エラー、レート制限、サーバーエラー、�
 
 ```text
 sumibi = Sumibi
-kiyoka = 清香
+tari-zu = タリーズ
 openai = OpenAI
 ro-maji = ローマ字
 ```
