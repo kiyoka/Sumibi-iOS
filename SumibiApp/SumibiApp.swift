@@ -1115,7 +1115,7 @@ private struct UserDictionaryEditor: View {
                         saveMessage = ""
                     }
                 if text.isEmpty {
-                    Text("sumibi = Sumibi\nkiyoka = 清香\nopenai = OpenAI")
+                    Text("sumibi = Sumibi\ntari-zu = タリーズ\nopenai = OpenAI")
                         .font(.body.monospaced())
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 13)
