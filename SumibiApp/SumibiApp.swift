@@ -11,50 +11,6 @@ struct SumibiApp: App {
     }
 }
 
-private enum ModelOption: String, CaseIterable, Identifiable {
-    case gpt6Sol = "gpt-6-sol"
-    case gpt6Luna = "gpt-6-luna"
-    case custom
-
-    var id: Self { self }
-
-    var displayName: String {
-        switch self {
-        case .gpt6Sol:
-            "GPT-6 Sol"
-        case .gpt6Luna:
-            "GPT-6 Luna"
-        case .custom:
-            "自由入力"
-        }
-    }
-
-    var summary: String? {
-        switch self {
-        case .gpt6Sol:
-            "既定・精度重視"
-        case .gpt6Luna:
-            "低コスト・高速重視"
-        case .custom:
-            nil
-        }
-    }
-
-    var pickerLabel: String {
-        guard let summary else { return displayName }
-        return "\(displayName)（\(summary)）"
-    }
-
-    var modelID: String? {
-        self == .custom ? nil : rawValue
-    }
-
-    static func selection(for model: String) -> Self {
-        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allCases.first { $0.modelID == normalizedModel } ?? .custom
-    }
-}
-
 private struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
@@ -95,6 +51,7 @@ private struct ContentView: View {
             Form {
                 introductionSection
                 providerSection
+                settingsChatSection
                 keyboardBehaviorSection
                 customSystemPromptSection
                 userDictionarySection
@@ -141,7 +98,7 @@ private struct ContentView: View {
                     loadUsageStatistics()
                 }
             } message: {
-                Text("モデルごとのトークン数、概算料金、変換回数を0に戻します。")
+                Text("モデルごとのトークン数、概算料金、変換回数、設定チャット回数を0に戻します。")
             }
         }
     }
@@ -267,6 +224,24 @@ private struct ContentView: View {
         }
     }
 
+    private var settingsChatSection: some View {
+        Section {
+            NavigationLink {
+                SettingsChatView(onSettingsChanged: {
+                    loadSettings()
+                    loadUsageStatistics()
+                })
+            } label: {
+                Label("チャットで設定", systemImage: "bubble.left.and.bubble.right")
+            }
+            .disabled(!hasLoadedSettings || hasUnsavedAPISettings)
+        } footer: {
+            Text(hasUnsavedAPISettings
+                 ? "API設定を保存してからチャットを開いてください。"
+                 : "モデル、音や振動を会話で変更できます。")
+        }
+    }
+
     private var usageSection: some View {
         Section {
             if usageStatistics.isEmpty {
@@ -290,6 +265,9 @@ private struct ContentView: View {
                         }
                         VStack(spacing: 8) {
                             LabeledContent("変換回数", value: "\(statistics.conversionCount)回")
+                            if statistics.settingsChatCount > 0 {
+                                LabeledContent("設定チャット回数", value: "\(statistics.settingsChatCount)回")
+                            }
                             LabeledContent("入力トークン", value: statistics.inputTokens.formatted())
                             if statistics.cachedInputTokens > 0 {
                                 LabeledContent(
@@ -453,7 +431,7 @@ private struct ContentView: View {
         } header: {
             Text("プライバシー")
         } footer: {
-            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書、変換プロンプトを上記の第三者AIへ送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
+            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書、変換プロンプトを上記の第三者AIへ送信します。設定チャットでは会話内容、変更対象の現在値を送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
         }
     }
 
