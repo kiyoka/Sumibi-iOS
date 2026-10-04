@@ -23,6 +23,8 @@
 		A1000000000000000000000E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Assets.xcassets */; };
 		A1000000000000000000000F /* KeyboardIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* KeyboardIcon.png */; };
 		A10000000000000000000010 /* UserDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* UserDictionary.swift */; };
+		A10000000000000000000011 /* SettingsChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* SettingsChat.swift */; };
+		A10000000000000000000012 /* SettingsChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* SettingsChatView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +84,8 @@
 		A20000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000011 /* KeyboardIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = KeyboardIcon.png; sourceTree = "<group>"; };
 		A20000000000000000000012 /* UserDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDictionary.swift; sourceTree = "<group>"; };
+		A20000000000000000000013 /* SettingsChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChat.swift; sourceTree = "<group>"; };
+		A20000000000000000000014 /* SettingsChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +131,7 @@
 			children = (
 				A20000000000000000000010 /* Assets.xcassets */,
 				A20000000000000000000001 /* SumibiApp.swift */,
+				A20000000000000000000014 /* SettingsChatView.swift */,
 				A20000000000000000000009 /* SumibiApp.entitlements */,
 			);
 			path = SumibiApp;
@@ -153,6 +158,7 @@
 				A20000000000000000000003 /* SumibiCore.swift */,
 				A20000000000000000000008 /* SharedSettings.swift */,
 				A20000000000000000000012 /* UserDictionary.swift */,
+				A20000000000000000000013 /* SettingsChat.swift */,
 			);
 			path = SumibiCore;
 			sourceTree = "<group>";
@@ -300,6 +306,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* SumibiApp.swift in Sources */,
+				A10000000000000000000012 /* SettingsChatView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -322,6 +329,7 @@
 				A10000000000000000000003 /* SumibiCore.swift in Sources */,
 				A10000000000000000000010 /* UserDictionary.swift in Sources */,
 				A10000000000000000000007 /* SharedSettings.swift in Sources */,
+				A10000000000000000000011 /* SettingsChat.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

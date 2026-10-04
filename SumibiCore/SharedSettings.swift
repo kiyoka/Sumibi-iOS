@@ -1,5 +1,42 @@
 import Foundation
 
+// Shared by the settings picker and the settings chat context.
+public enum ModelOption: String, CaseIterable, Identifiable, Codable, Sendable {
+    case gpt6Sol = "gpt-6-sol"
+    case gpt6Luna = "gpt-6-luna"
+    case custom
+
+    public var id: Self { self }
+
+    public var displayName: String {
+        switch self {
+        case .gpt6Sol: "GPT-6 Sol"
+        case .gpt6Luna: "GPT-6 Luna"
+        case .custom: "自由入力"
+        }
+    }
+
+    public var summary: String? {
+        switch self {
+        case .gpt6Sol: "既定・精度重視"
+        case .gpt6Luna: "低コスト・高速重視"
+        case .custom: nil
+        }
+    }
+
+    public var pickerLabel: String {
+        guard let summary else { return displayName }
+        return "\(displayName)（\(summary)）"
+    }
+
+    public var modelID: String? { self == .custom ? nil : rawValue }
+
+    public static func selection(for model: String) -> Self {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allCases.first { $0.modelID == normalized } ?? .custom
+    }
+}
+
 public struct ProviderConfiguration: Codable, Equatable, Sendable {
     public static let defaultEndpoint = "https://api.openai.com"
     public static let defaultModel = "gpt-6-sol"
@@ -106,6 +143,39 @@ public struct SharedSettingsStore {
 
     public func resetProviderConfiguration() {
         defaults.removeObject(forKey: Key.providerConfiguration)
+    }
+
+    public func loadSettingsChatSnapshot() -> SettingsChatSnapshot {
+        SettingsChatSnapshot(
+            provider: loadProviderConfiguration(),
+            hapticFeedbackEnabled: loadHapticFeedbackEnabled(),
+            conversionCompletionHapticEnabled: loadConversionCompletionHapticEnabled(),
+            keyClickSoundEnabled: loadKeyClickSoundEnabled()
+        )
+    }
+
+    public func applySettingsChatChanges(
+        _ changes: [SettingsChatChange],
+        basedOn snapshot: SettingsChatSnapshot
+    ) throws {
+        guard loadSettingsChatSnapshot() == snapshot else {
+            throw SettingsChatError.settingsChanged
+        }
+        let updated = try snapshot.applying(changes)
+        // Validate every action and prepare all throwing work before writing any setting.
+        let providerData = try encoder.encode(updated.provider)
+        if updated.provider != snapshot.provider {
+            defaults.set(providerData, forKey: Key.providerConfiguration)
+        }
+        if updated.hapticFeedbackEnabled != snapshot.hapticFeedbackEnabled {
+            saveHapticFeedbackEnabled(updated.hapticFeedbackEnabled)
+        }
+        if updated.conversionCompletionHapticEnabled != snapshot.conversionCompletionHapticEnabled {
+            saveConversionCompletionHapticEnabled(updated.conversionCompletionHapticEnabled)
+        }
+        if updated.keyClickSoundEnabled != snapshot.keyClickSoundEnabled {
+            saveKeyClickSoundEnabled(updated.keyClickSoundEnabled)
+        }
     }
 
     public func loadHapticFeedbackEnabled() -> Bool {
@@ -215,7 +285,7 @@ public struct SharedSettingsStore {
         return statistics.sorted { $0.model.localizedStandardCompare($1.model) == .orderedAscending }
     }
 
-    public func recordUsage(_ usage: TokenUsage, model: String) {
+    public func recordUsage(_ usage: TokenUsage, model: String, isSettingsChat: Bool = false) {
         let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedModel.isEmpty else {
             return
@@ -225,7 +295,11 @@ public struct SharedSettingsStore {
             if statistics[index].collectionStartedAt == nil {
                 statistics[index].collectionStartedAt = Date()
             }
-            statistics[index].conversionCount += 1
+            if isSettingsChat {
+                statistics[index].settingsChatCount += 1
+            } else {
+                statistics[index].conversionCount += 1
+            }
             statistics[index].inputTokens += usage.inputTokens
             statistics[index].cachedInputTokens += usage.cachedInputTokens
             statistics[index].outputTokens += usage.outputTokens
@@ -233,7 +307,8 @@ public struct SharedSettingsStore {
             statistics.append(
                 ModelUsageStatistics(
                     model: normalizedModel,
-                    conversionCount: 1,
+                    conversionCount: isSettingsChat ? 0 : 1,
+                    settingsChatCount: isSettingsChat ? 1 : 0,
                     inputTokens: usage.inputTokens,
                     cachedInputTokens: usage.cachedInputTokens,
                     outputTokens: usage.outputTokens,
@@ -261,6 +336,7 @@ public struct ModelUsageStatistics: Codable, Equatable, Identifiable, Sendable {
 
     public let model: String
     public var conversionCount: Int
+    public var settingsChatCount: Int
     public var inputTokens: Int
     public var cachedInputTokens: Int
     public var outputTokens: Int
@@ -269,6 +345,7 @@ public struct ModelUsageStatistics: Codable, Equatable, Identifiable, Sendable {
     public init(
         model: String,
         conversionCount: Int = 0,
+        settingsChatCount: Int = 0,
         inputTokens: Int = 0,
         cachedInputTokens: Int = 0,
         outputTokens: Int = 0,
@@ -276,10 +353,27 @@ public struct ModelUsageStatistics: Codable, Equatable, Identifiable, Sendable {
     ) {
         self.model = model
         self.conversionCount = conversionCount
+        self.settingsChatCount = settingsChatCount
         self.inputTokens = inputTokens
         self.cachedInputTokens = cachedInputTokens
         self.outputTokens = outputTokens
         self.collectionStartedAt = collectionStartedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case model, conversionCount, settingsChatCount
+        case inputTokens, cachedInputTokens, outputTokens, collectionStartedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        model = try values.decode(String.self, forKey: .model)
+        conversionCount = try values.decode(Int.self, forKey: .conversionCount)
+        settingsChatCount = try values.decodeIfPresent(Int.self, forKey: .settingsChatCount) ?? 0
+        inputTokens = try values.decode(Int.self, forKey: .inputTokens)
+        cachedInputTokens = try values.decode(Int.self, forKey: .cachedInputTokens)
+        outputTokens = try values.decode(Int.self, forKey: .outputTokens)
+        collectionStartedAt = try values.decodeIfPresent(Date.self, forKey: .collectionStartedAt)
     }
 
     public var totalTokens: Int {
