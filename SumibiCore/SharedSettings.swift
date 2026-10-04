@@ -52,7 +52,6 @@ public struct SharedSettingsStore {
 
     private enum Key {
         static let providerConfiguration = "providerConfiguration"
-        static let didMigrateGPT56TerraToGPT6Sol = "didMigrateGPT56TerraToGPT6Sol"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let conversionCompletionHapticEnabled = "conversionCompletionHapticEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
@@ -81,23 +80,9 @@ public struct SharedSettingsStore {
     public func loadProviderConfiguration() -> ProviderConfiguration {
         guard
             let data = defaults.data(forKey: Key.providerConfiguration),
-            var configuration = try? decoder.decode(ProviderConfiguration.self, from: data)
+            let configuration = try? decoder.decode(ProviderConfiguration.self, from: data)
         else {
-            defaults.set(true, forKey: Key.didMigrateGPT56TerraToGPT6Sol)
             return ProviderConfiguration()
-        }
-
-        if !defaults.bool(forKey: Key.didMigrateGPT56TerraToGPT6Sol) {
-            let normalizedModel = configuration.model
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased()
-            if normalizedModel == "gpt-5.6-terra" {
-                configuration.model = ProviderConfiguration.defaultModel
-                if let migratedData = try? encoder.encode(configuration) {
-                    defaults.set(migratedData, forKey: Key.providerConfiguration)
-                }
-            }
-            defaults.set(true, forKey: Key.didMigrateGPT56TerraToGPT6Sol)
         }
 
         let endpoint = configuration.endpoint
