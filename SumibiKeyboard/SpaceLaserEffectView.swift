@@ -66,6 +66,10 @@ final class KeyboardGameEffectView: UIView {
 @MainActor
 final class SpaceLaserEffectView: UIView {
     private let ship = UIImageView(image: SpaceLaserEffectView.loadSprite())
+    private let hullTint = CALayer()
+    private let hullMask = CALayer()
+    private let energyLines = CAShapeLayer()
+    private let energyCore = CAShapeLayer()
     private let chargeTrack = CALayer()
     private let chargeFill = CAGradientLayer()
     private var charge: CGFloat = 0
@@ -86,6 +90,22 @@ final class SpaceLaserEffectView: UIView {
         ship.layer.magnificationFilter = .nearest
         ship.layer.minificationFilter = .nearest
         addSubview(ship)
+        // Tint only opaque sprite pixels, never the transparent square around the ship.
+        hullTint.backgroundColor = UIColor(red: 0.05, green: 0.7, blue: 1, alpha: 1).cgColor
+        hullMask.contents = ship.image?.cgImage
+        hullMask.magnificationFilter = .nearest
+        hullMask.minificationFilter = .nearest
+        hullTint.mask = hullMask
+        hullTint.opacity = 0
+        ship.layer.addSublayer(hullTint)
+        for light in [energyLines, energyCore] {
+            light.fillColor = UIColor.systemCyan.cgColor
+            light.shadowColor = UIColor.systemCyan.cgColor
+            light.shadowOffset = .zero
+            light.opacity = 0
+            ship.layer.addSublayer(light)
+        }
+        energyCore.fillColor = UIColor(red: 0.8, green: 1, blue: 1, alpha: 1).cgColor
         chargeTrack.backgroundColor = UIColor.systemTeal.withAlphaComponent(0.2).cgColor
         chargeFill.colors = [UIColor.systemBlue.cgColor, UIColor.systemCyan.cgColor]
         chargeFill.startPoint = CGPoint(x: 0, y: 0.5)
@@ -111,12 +131,14 @@ final class SpaceLaserEffectView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         ship.frame = CGRect(x: 2, y: 1, width: 44, height: max(0, bounds.height - 4))
+        layoutEnergyLights()
         updateGauge(animated: false)
     }
 
     func setCharge(_ level: Double, animated: Bool = true, pulsesCharacter: Bool = true) {
         charge = CGFloat(level)
         updateGauge(animated: animated && !UIAccessibility.isReduceMotionEnabled)
+        updateEnergyLights()
         setNeedsDisplay()
         guard animated, pulsesCharacter, !UIAccessibility.isReduceMotionEnabled else { return }
         let pulse = CAKeyframeAnimation(keyPath: "transform.scale")
@@ -124,6 +146,16 @@ final class SpaceLaserEffectView: UIView {
         pulse.keyTimes = [0, 0.3, 1]
         pulse.duration = 0.2
         ship.layer.add(pulse, forKey: "charge")
+        // Briefly energize the slits on real taps, not on every meter-decay update.
+        if energy == 0 {
+            for light in [energyLines, energyCore] {
+                let flash = CAKeyframeAnimation(keyPath: "opacity")
+                flash.values = [light.opacity, min(1, light.opacity + 0.22), light.opacity]
+                flash.keyTimes = [0, 0.25, 1]
+                flash.duration = 0.2
+                light.add(flash, forKey: "charge")
+            }
+        }
     }
 
     func releaseEnergy(_ level: Double) {
@@ -131,6 +163,10 @@ final class SpaceLaserEffectView: UIView {
         setCharge(0, animated: false)
         guard level > 0, !UIAccessibility.isReduceMotionEnabled else { return }
         energy = CGFloat(min(1, level))
+        energyLines.removeAllAnimations()
+        energyCore.removeAllAnimations()
+        hullTint.removeAllAnimations()
+        updateEnergyLights()
         startTime = CACurrentMediaTime()
         let link = CADisplayLink(target: self, selector: #selector(tick))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 30, preferred: 30)
@@ -153,6 +189,7 @@ final class SpaceLaserEffectView: UIView {
     func stop() {
         stopShot()
         charge = 0
+        updateEnergyLights()
         updateGauge(animated: false)
         setNeedsDisplay()
     }
@@ -173,6 +210,10 @@ final class SpaceLaserEffectView: UIView {
         elapsed = 0
         energy = 0
         ship.layer.removeAllAnimations()
+        energyLines.removeAllAnimations()
+        energyCore.removeAllAnimations()
+        hullTint.removeAllAnimations()
+        updateEnergyLights()
         setNeedsDisplay()
     }
 
@@ -183,7 +224,59 @@ final class SpaceLaserEffectView: UIView {
             stopShot()
             return
         }
+        updateEnergyLights()
         setNeedsDisplay()
+    }
+
+    private func layoutEnergyLights() {
+        // Coordinates follow the original sprite's three rear slits, side conduit and core.
+        // Attaching lights to the ship layer keeps them aligned through recoil and scaling.
+        let side = min(ship.bounds.width, ship.bounds.height)
+        let origin = CGPoint(x: (ship.bounds.width - side) / 2, y: (ship.bounds.height - side) / 2)
+        func spriteRect(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
+            CGRect(x: origin.x + x * side, y: origin.y + y * side,
+                   width: width * side, height: height * side)
+        }
+        let lines = CGMutablePath()
+        for y in [CGFloat(0.46), 0.50, 0.54] {
+            lines.addRect(spriteRect(0.22, y, 0.13, 0.02))
+        }
+        lines.addRect(spriteRect(0.40, 0.54, 0.34, 0.02))
+        let core = CGPath(rect: spriteRect(0.51, 0.62, 0.06, 0.05), transform: nil)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hullTint.frame = CGRect(origin: origin, size: CGSize(width: side, height: side))
+        hullMask.frame = hullTint.bounds
+        energyLines.frame = ship.bounds
+        energyCore.frame = ship.bounds
+        energyLines.path = lines
+        energyLines.shadowPath = lines
+        energyCore.path = core
+        energyCore.shadowPath = core
+        CATransaction.commit()
+    }
+
+    private func updateEnergyLights() {
+        var intensity = charge * 0.9
+        if energy > 0 {
+            let remaining = max(0, min(1, CGFloat((duration - elapsed) / duration) / 0.35))
+            let cancelled = fadeStartTime.map {
+                max(0, 1 - CGFloat((CACurrentMediaTime() - $0) / 0.28))
+            } ?? 1
+            // Small continuous pulses, never on/off flashes of the whole keyboard.
+            let pulse = 0.76 + 0.24 * CGFloat(cos(elapsed * .pi * 2 * 2.5))
+            intensity = max(intensity, (0.75 + 0.5 * energy) * pulse * remaining * cancelled)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hullTint.opacity = Float(min(0.7, intensity * (energy > 0 ? 0.56 : 0.3)))
+        energyLines.opacity = Float(min(1, intensity))
+        energyCore.opacity = Float(min(1, intensity * 1.15))
+        energyLines.shadowOpacity = Float(min(1, intensity))
+        energyCore.shadowOpacity = Float(min(1, intensity))
+        energyLines.shadowRadius = 2 + 3.5 * intensity
+        energyCore.shadowRadius = 2.5 + 4 * intensity
+        CATransaction.commit()
     }
 
     private func updateGauge(animated: Bool) {
