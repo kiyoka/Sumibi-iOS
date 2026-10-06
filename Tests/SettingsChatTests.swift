@@ -39,8 +39,10 @@ private struct SettingsChatTests {
         let store = SharedSettingsStore(defaults: defaults)
         try testProposals(store)
         try testLegacyUsage(store, defaults)
+        try testUsageContext(store)
         try await testTransport(store)
-        print("Settings chat checks passed: validation, stale changes, legacy usage, request isolation, conversion compatibility")
+        try await testConsultationTransport(store)
+        print("Chat checks passed: settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
     }
 
     static func testProposals(_ store: SharedSettingsStore) throws {
@@ -233,6 +235,123 @@ private struct SettingsChatTests {
             "choices": [["message": ["role": "assistant", "content": content]]],
             "usage": ["prompt_tokens": 10, "completion_tokens": 4],
         ])
+    }
+
+    static func testUsageContext(_ store: SharedSettingsStore) throws {
+        let now = ISO8601DateFormatter().date(from: "2026-10-05T03:00:00Z")!
+        let rows = [
+            ModelUsageStatistics(model: "gpt-6-sol", conversionCount: 7, settingsChatCount: 3,
+                                 inputTokens: 500_000, collectionStartedAt: now.addingTimeInterval(-10 * 86_400)),
+            ModelUsageStatistics(model: "custom-model", conversionCount: 2, inputTokens: 100,
+                                 collectionStartedAt: now.addingTimeInterval(-5 * 86_400)),
+            ModelUsageStatistics(model: "gpt-5.6-terra", inputTokens: 10, cachedInputTokens: 5, outputTokens: 2),
+        ]
+        let context = SettingsChatUsageContext(statistics: rows, capturedAt: now,
+                                              timeZone: TimeZone(identifier: "Asia/Tokyo")!)
+        let data = Data(try context.contextJSON().utf8)
+        let object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        expect(object["capturedAt"] as? String == "2026-10-05T12:00:00.000+09:00", "Local captured time missing")
+        expect(object["timeZone"] as? String == "Asia/Tokyo", "Time zone missing")
+        expect(object["utcOffsetSeconds"] as? Int == 32_400, "UTC offset missing")
+        expect(object["currency"] as? String == "USD", "Cost currency missing")
+        let models = object["models"] as! [[String: Any]]
+        for (row, model) in zip(rows, models) {
+            let serialized = model["estimatedCostUSD"] as? String
+            expect(serialized == row.estimatedCostUSD.map { NSDecimalNumber(decimal: $0).stringValue },
+                   "Chat cost differs from the existing usage calculation")
+        }
+        expect(models[0]["estimatedCostUSD"] as? String == "1", "Fixed evaluation fixture cost should be 1 USD")
+        expect(models[0]["settingsChatCount"] as? Int == 3, "Chat count not sent")
+        expect(models[1]["estimatedCostUSD"] is NSNull, "Unknown price was not explicit null")
+        expect(models[2]["collectionStartedAt"] is NSNull, "Unknown start time was fabricated")
+        expect(object["modelsWithUnknownCost"] as? [String] == ["custom-model"], "Unknown-price models missing")
+        let known = rows.compactMap(\.estimatedCostUSD).reduce(Decimal.zero, +)
+        expect(object["knownCostSubtotalUSD"] as? String == NSDecimalNumber(decimal: known).stringValue,
+               "Known subtotal includes unknown prices")
+        expect(object["forecast"] == nil && object["dailyCost"] == nil, "App must not precompute the LLM forecast")
+
+        let empty = try JSONSerialization.jsonObject(with: Data(SettingsChatUsageContext(
+            statistics: [], capturedAt: now
+        ).contextJSON().utf8)) as! [String: Any]
+        expect((empty["models"] as! [Any]).isEmpty, "Empty usage was fabricated")
+        expect(empty["knownCostSubtotalUSD"] as? String == "0", "Empty subtotal incorrect")
+
+        let reset = store.loadUsageStatistics()
+        let before = store.loadSettingsChatSnapshot()
+        _ = try SettingsChatUsageContext(statistics: reset).contextJSON()
+        expect(store.loadUsageStatistics() == reset && store.loadSettingsChatSnapshot() == before,
+               "Reading usage context changed saved data")
+        expect(reset.allSatisfy { $0.totalTokens == 0 }, "Reset test statistics were not retained")
+
+        for start in [now, now.addingTimeInterval(-60), now.addingTimeInterval(60)] {
+            let short = SettingsChatUsageContext(statistics: [
+                ModelUsageStatistics(model: "gpt-6-sol", collectionStartedAt: start),
+            ], capturedAt: now)
+            let json = try JSONSerialization.jsonObject(with: Data(short.contextJSON().utf8)) as! [String: Any]
+            let model = (json["models"] as! [[String: Any]])[0]
+            expect(model["estimatedCostUSD"] as? String == "0", "Recorded zero became unknown")
+            expect(model["collectionStartedAt"] is String, "Short/future timestamp was discarded")
+        }
+    }
+
+    static func testConsultationTransport(_ store: SharedSettingsStore) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockChatProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let client = OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
+            endpoint: URL(string: "https://api.openai.com")!, model: "gpt-6-sol", apiKey: "TEST_ONLY_KEY"
+        ), session: session)
+        let snapshot = store.loadSettingsChatSnapshot()
+        let now = ISO8601DateFormatter().date(from: "2026-10-05T03:00:00Z")!
+        let fixedUsage = SettingsChatUsageContext(statistics: [
+            ModelUsageStatistics(model: "gpt-6-sol", inputTokens: 500_000,
+                                 collectionStartedAt: now.addingTimeInterval(-10 * 86_400)),
+        ], capturedAt: now, timeZone: TimeZone(identifier: "Asia/Tokyo")!)
+        var history: [SettingsChatMessage] = []
+        for (question, reply) in [
+            ("今どれくらい費用がかかっていますか？", "記録された概算は1 USDです。"),
+            ("今後15日でどれくらい費用がかかりそうですか？", "同じペースなら追加約1.5 USDです。"),
+            ("では30日なら？", "追加約3 USDです。"),
+            ("2倍使ったら今後1週間は？", "追加約1.4 USDです。"),
+            ("範囲だけ変換するには？", "文字列を選択して「範囲を変換」を押してください。"),
+        ] {
+            history.append(SettingsChatMessage(role: .user, content: question))
+            let expectedHistoryCount = history.count
+            MockChatProtocol.handler = { request in
+                let data = try requestBody(request)
+                let text = String(decoding: data, as: UTF8.self)
+                expect(!text.contains("TEST_ONLY_KEY") && !text.contains("PRIVATE_DICTIONARY")
+                       && !text.contains("PRIVATE_PRESET_NAME") && !text.contains("PRIVATE_PRESET_BODY"),
+                       "Private data was included in the consultation")
+                let body = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+                let messages = body["messages"] as! [[String: String]]
+                expect(messages.count == expectedHistoryCount + 1, "Conversation history lost")
+                expect(messages.last?["content"] == question, "Arbitrary question changed")
+                let instructions = messages.first!["content"]!
+                for required in ["<operation_guide>", "<examples>", "<usage_context>",
+                                 "未来の見積もりはあなた自身が統計から計算", "固定30日の回答にしない",
+                                 "今回渡されたusage_contextの最新統計", "changesを空", "1日未満",
+                                 "実際の請求", "範囲を変換", "tari-zu = タリーズ"] {
+                    expect(instructions.contains(required), "Consultation instructions missing: \(required)")
+                }
+                let usageJSON = instructions.components(separatedBy: "<usage_context>\n").last!
+                    .components(separatedBy: "\n</usage_context>").first!
+                let usage = try JSONSerialization.jsonObject(with: Data(usageJSON.utf8)) as! [String: Any]
+                let model = (usage["models"] as! [[String: Any]])[0]
+                expect(model["estimatedCostUSD"] as? String == "1", "Real fixture confused with example")
+                expect(request.timeoutInterval == 15, "Consultation timeout changed")
+                return try response(content: String(decoding: JSONSerialization.data(withJSONObject: [
+                    "reply": reply, "changes": [],
+                ]), as: UTF8.self))
+            }
+            let completion = try await client.chatForSettings(messages: history, snapshot: snapshot,
+                                                              usageContext: fixedUsage)
+            let payload = try SettingsChatPayload.decode(completion.content)
+            expect(payload.changes.isEmpty, "Informational mock answer contained settings changes")
+            expect(store.loadSettingsChatSnapshot() == snapshot, "Consultation changed settings")
+            history.append(SettingsChatMessage(role: .assistant, content: completion.content))
+        }
     }
 
     static func requestBody(_ request: URLRequest) throws -> Data {

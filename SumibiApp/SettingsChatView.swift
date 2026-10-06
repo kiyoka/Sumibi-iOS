@@ -48,10 +48,11 @@ struct SettingsChatView: View {
     @FocusState private var isInputFocused: Bool
 
     private let examples = [
-        "低コストのモデルにしたい",
-        "今のモデルは何？",
+        "Sumibiの使い方を教えて",
+        "今どれくらい費用がかかっていますか？",
+        "今後15日でどれくらい費用がかかりそうですか？",
+        "今の2倍使ったら、今後1週間の費用はどれくらい？",
         "使えるモデルの一覧を見たい",
-        "変換が終わったときの振動を止めたい",
         "音と振動を全部止めたい",
     ]
 
@@ -86,7 +87,7 @@ struct SettingsChatView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom) { composer }
-        .navigationTitle("チャットで設定")
+        .navigationTitle("Sumibiに相談")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { refreshConnection() }
         .onDisappear {
@@ -98,7 +99,7 @@ struct SettingsChatView: View {
 
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("モデル、音や振動を会話で変更できます。")
+            Text("使い方や概算費用を質問できます。モデル、音や振動の設定変更もできます。")
             Text("変更内容を確認し、「適用する」を押すと保存されます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -107,7 +108,7 @@ struct SettingsChatView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("会話内容と現在の設定を設定済みAIへ送信します。APIの利用料金が発生します。APIキーなどの秘密情報は入力しないでください。会話はこの画面を閉じると消えます。")
+            Text("会話内容、現在の設定、モデル別の利用統計（集計開始日時・回数・トークン数・概算料金）を設定済みAIへ送信します。費用予測はこの端末の記録に基づくAIの見積もりで、実際の請求額ではありません。会話にもAPIの利用料金が発生します。APIキーなどの秘密情報は入力しないでください。会話はこの画面を閉じると消えます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if !connectionMessage.isEmpty {
@@ -130,7 +131,7 @@ struct SettingsChatView: View {
     private var composer: some View {
         VStack(spacing: 8) {
             HStack(alignment: .bottom, spacing: 12) {
-                TextField("変更したい設定を入力", text: $input, axis: .vertical)
+                TextField("使い方・費用・設定について質問", text: $input, axis: .vertical)
                     .lineLimit(1 ... 4)
                     .textFieldStyle(.roundedBorder)
                     .focused($isInputFocused)
@@ -255,6 +256,7 @@ struct SettingsChatView: View {
         let entry = ChatEntry(role: .user, text: text)
         entries.append(entry)
         let history = entries.map(\.wireMessage)
+        let usageContext = SettingsChatUsageContext(statistics: store.loadUsageStatistics())
         let client = OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
             endpoint: url, model: snapshot.provider.model, apiKey: apiKey
         ))
@@ -267,7 +269,9 @@ struct SettingsChatView: View {
                 }
             }
             do {
-                let completion = try await client.chatForSettings(messages: history, snapshot: snapshot)
+                let completion = try await client.chatForSettings(
+                    messages: history, snapshot: snapshot, usageContext: usageContext
+                )
                 guard requestID == id, !Task.isCancelled else { return }
                 if let usage = completion.usage {
                     store.recordUsage(usage, model: completion.model, isSettingsChat: true)
