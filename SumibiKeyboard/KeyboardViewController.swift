@@ -210,6 +210,13 @@ final class KeyboardViewController: UIInputViewController {
     private weak var candidateBar: UIView?
     private weak var candidateStripView: HorizontalCandidateStripView?
     private var candidateBarShimmerView: UIView?
+    private let dragonGameEffect = DragonGameEffectView()
+    private weak var candidateIconView: UIImageView?
+    private var candidateIconWidthConstraint: NSLayoutConstraint?
+    private var gameEnergy = KeyboardGameEnergy()
+    private var gameEnergyTimer: Timer?
+    private var gameDocumentIdentifier: UUID?
+    private var isGameModeEnabled = false
     private weak var convertButtonGlassSurface: EmberGlassSurfaceView?
     private var letterButtons: [UIButton] = []
     private var compositionTracker = CompositionTracker()
@@ -264,11 +271,26 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         _ = sharedSettings?.loadProviderConfiguration()
         configureKeyboard()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(gameReduceMotionChanged),
+            name: UIAccessibility.reduceMotionStatusDidChangeNotification,
+            object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshGamePreferences()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopKeyRepeat()
+        stopGameEnergyUpdates()
+        gameEnergy.reset()
+        gameDocumentIdentifier = nil
+        dragonGameEffect.stop()
         setSymbolPanelExpanded(false, animated: false)
         conversionTask?.cancel()
         conversionTask = nil
@@ -287,6 +309,14 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        if let gameDocumentIdentifier,
+           gameDocumentIdentifier != textDocumentProxy.documentIdentifier {
+            stopGameEnergyUpdates()
+            gameEnergy.reset()
+            self.gameDocumentIdentifier = nil
+            dragonGameEffect.setCharge(0, animated: false)
+            dragonGameEffect.fadeFire()
+        }
         refreshConvertButton()
     }
 
@@ -476,14 +506,24 @@ final class KeyboardViewController: UIInputViewController {
         candidateMessageStack.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(iconView)
+        dragonGameEffect.translatesAutoresizingMaskIntoConstraints = false
+        dragonGameEffect.isHidden = true
+        container.insertSubview(dragonGameEffect, at: 0)
         container.addSubview(candidateStrip)
         container.addSubview(candidateMessageStack)
         candidateStripView = candidateStrip
+        candidateIconView = iconView
+        let iconWidth = iconView.widthAnchor.constraint(equalToConstant: 28)
+        candidateIconWidthConstraint = iconWidth
         NSLayoutConstraint.activate([
+            dragonGameEffect.topAnchor.constraint(equalTo: container.topAnchor),
+            dragonGameEffect.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            dragonGameEffect.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            dragonGameEffect.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 6),
             iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 28),
-            iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor),
+            iconWidth,
+            iconView.heightAnchor.constraint(equalToConstant: 28),
             candidateStrip.topAnchor.constraint(equalTo: container.topAnchor),
             candidateStrip.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             candidateStrip.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
@@ -1166,9 +1206,9 @@ final class KeyboardViewController: UIInputViewController {
             candidateMessageStack.addArrangedSubview(indicator)
         }
 
-        let label = UILabel()
+        let label = CandidateStatusLabel()
         label.text = message
-        label.textColor = .secondaryLabel
+        label.hasGameBackground = isGameModeEnabled
         label.font = .systemFont(ofSize: 15)
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.8
@@ -1378,6 +1418,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func cancelConversionForEditing() {
+        dragonGameEffect.fadeFire()
         conversionTask?.cancel()
         conversionTask = nil
         activeRequestID = nil
@@ -1404,7 +1445,73 @@ final class KeyboardViewController: UIInputViewController {
 
         textDocumentProxy.insertText(text)
         compositionTracker.append(text)
+        refreshGamePreferences()
+        if isGameModeEnabled, repeatingButton == nil {
+            if gameDocumentIdentifier != textDocumentProxy.documentIdentifier {
+                stopGameEnergyUpdates()
+                gameEnergy.reset()
+                gameDocumentIdentifier = textDocumentProxy.documentIdentifier
+            }
+            dragonGameEffect.setCharge(gameEnergy.recordKeystroke(at: CACurrentMediaTime()))
+            startGameEnergyUpdates()
+        }
         refreshConvertButton()
+    }
+
+    private func refreshGamePreferences() {
+        let enabled = sharedSettings?.loadKeyboardGameModeEnabled() ?? false
+        guard enabled != isGameModeEnabled else { return }
+        isGameModeEnabled = enabled
+        stopGameEnergyUpdates()
+        gameEnergy.reset()
+        gameDocumentIdentifier = nil
+        dragonGameEffect.stop()
+        dragonGameEffect.isHidden = !enabled
+        candidateIconView?.isHidden = enabled
+        candidateIconWidthConstraint?.constant = enabled ? 44 : 28
+        for case let label as CandidateStatusLabel in candidateMessageStack.arrangedSubviews {
+            label.hasGameBackground = enabled
+        }
+        if enabled { stopCandidateBarShimmer() }
+    }
+
+    private func beginGameConversionEffect() {
+        refreshGamePreferences()
+        guard isGameModeEnabled else { return }
+        stopGameEnergyUpdates()
+        if gameDocumentIdentifier != textDocumentProxy.documentIdentifier {
+            gameEnergy.reset()
+        }
+        dragonGameEffect.breatheFire(energy: gameEnergy.consume(at: CACurrentMediaTime()))
+    }
+
+    private func startGameEnergyUpdates() {
+        guard gameEnergyTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] timer in
+            // This timer is installed exclusively on the main run loop below.
+            let hasOwner = MainActor.assumeIsolated {
+                guard let self else { return false }
+                self.refreshGamePreferences()
+                if self.isGameModeEnabled {
+                    let level = self.gameEnergy.update(at: CACurrentMediaTime())
+                    self.dragonGameEffect.setCharge(level, pulsesDragon: false)
+                    if level == 0 { self.stopGameEnergyUpdates() }
+                }
+                return true
+            }
+            if !hasOwner { timer.invalidate() }
+        }
+        gameEnergyTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopGameEnergyUpdates() {
+        gameEnergyTimer?.invalidate()
+        gameEnergyTimer = nil
+    }
+
+    @objc private func gameReduceMotionChanged() {
+        dragonGameEffect.reduceMotionChanged()
     }
 
     private func refreshConvertButton() {
@@ -1548,6 +1655,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func endEmberConversionAnimation(success: Bool) {
+        if !success { dragonGameEffect.fadeFire() }
         isEmberConversionActive = false
         convertButtonEmberLevel = Int.min
         refreshConvertButton()
@@ -1560,6 +1668,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func startCandidateBarShimmer() {
         guard #available(iOS 26.0, *),
+              !isGameModeEnabled,
               !UIAccessibility.isReduceMotionEnabled,
               let candidateBar else {
             stopCandidateBarShimmer()
@@ -1925,6 +2034,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func convertTapped() {
+        refreshGamePreferences()
         if let selectedSnapshot = selectedTextSnapshot() {
             guard selectedSnapshot.source.count <= 512 else {
                 showCandidateMessage("選択範囲は512文字以内にしてください")
@@ -1982,6 +2092,7 @@ final class KeyboardViewController: UIInputViewController {
         let requestID = UUID()
         activeRequestID = requestID
         showConverting()
+        beginGameConversionEffect()
         beginEmberConversionAnimation()
 
         let request = ConversionRequest(
@@ -2097,6 +2208,7 @@ final class KeyboardViewController: UIInputViewController {
         let requestID = UUID()
         activeRequestID = requestID
         showConverting()
+        beginGameConversionEffect()
         beginEmberConversionAnimation()
 
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -2269,6 +2381,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func cancelTapped() {
+        dragonGameEffect.fadeFire()
         guard activeRequestID != nil else {
             return
         }

@@ -37,12 +37,29 @@ private struct SettingsChatTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = SharedSettingsStore(defaults: defaults)
+        testGameSettings(store, defaults)
         try testProposals(store)
         try testLegacyUsage(store, defaults)
         try testUsageContext(store)
         try await testTransport(store)
         try await testConsultationTransport(store)
         print("Chat checks passed: settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
+    }
+
+    static func testGameSettings(_ store: SharedSettingsStore, _ defaults: UserDefaults) {
+        expect(!store.loadKeyboardGameModeEnabled(), "Game mode must default to OFF")
+        expect(store.loadKeyboardGameTheme() == .rpgDragon, "Default prototype must be the dragon")
+        store.saveKeyboardGameTheme(.rpgDragon)
+        expect(!store.loadKeyboardGameModeEnabled(), "Choosing a theme must not enable game mode")
+        store.saveKeyboardGameModeEnabled(true)
+        let reloaded = SharedSettingsStore(defaults: defaults)
+        expect(reloaded.loadKeyboardGameModeEnabled(), "Game setting must persist")
+        expect(reloaded.loadKeyboardGameTheme() == .rpgDragon, "Theme must persist")
+        defaults.set("future-theme", forKey: "keyboardGameTheme")
+        expect(reloaded.loadKeyboardGameTheme() == .rpgDragon, "Unknown themes must fall back safely")
+        store.saveKeyboardGameModeEnabled(false)
+        expect(!reloaded.loadKeyboardGameModeEnabled(), "OFF must persist without resetting the theme")
+        store.saveKeyboardGameTheme(.rpgDragon)
     }
 
     static func testProposals(_ store: SharedSettingsStore) throws {

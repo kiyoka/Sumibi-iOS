@@ -25,6 +25,9 @@
 		A10000000000000000000010 /* UserDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* UserDictionary.swift */; };
 		A10000000000000000000011 /* SettingsChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* SettingsChat.swift */; };
 		A10000000000000000000012 /* SettingsChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* SettingsChatView.swift */; };
+		A10000000000000000000013 /* KeyboardGameEnergy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* KeyboardGameEnergy.swift */; };
+		A10000000000000000000014 /* DragonGameEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* DragonGameEffectView.swift */; };
+		A10000000000000000000015 /* RPGDragon.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* RPGDragon.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +89,9 @@
 		A20000000000000000000012 /* UserDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDictionary.swift; sourceTree = "<group>"; };
 		A20000000000000000000013 /* SettingsChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChat.swift; sourceTree = "<group>"; };
 		A20000000000000000000014 /* SettingsChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChatView.swift; sourceTree = "<group>"; };
+		A20000000000000000000015 /* KeyboardGameEnergy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardGameEnergy.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* DragonGameEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DragonGameEffectView.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* RPGDragon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = RPGDragon.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,6 +147,8 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000011 /* KeyboardIcon.png */,
+				A20000000000000000000017 /* RPGDragon.png */,
+				A20000000000000000000016 /* DragonGameEffectView.swift */,
 				A20000000000000000000002 /* KeyboardViewController.swift */,
 				A20000000000000000000004 /* Info.plist */,
 				A2000000000000000000000A /* SumibiKeyboard.entitlements */,
@@ -159,6 +167,7 @@
 				A20000000000000000000008 /* SharedSettings.swift */,
 				A20000000000000000000012 /* UserDictionary.swift */,
 				A20000000000000000000013 /* SettingsChat.swift */,
+				A20000000000000000000015 /* KeyboardGameEnergy.swift */,
 			);
 			path = SumibiCore;
 			sourceTree = "<group>";
@@ -287,6 +296,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000000000000000000000F /* KeyboardIcon.png in Resources */,
+				A10000000000000000000015 /* RPGDragon.png in Resources */,
 				A1000000000000000000000D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -315,6 +325,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000002 /* KeyboardViewController.swift in Sources */,
+				A10000000000000000000014 /* DragonGameEffectView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -330,6 +341,7 @@
 				A10000000000000000000010 /* UserDictionary.swift in Sources */,
 				A10000000000000000000007 /* SharedSettings.swift in Sources */,
 				A10000000000000000000011 /* SettingsChat.swift in Sources */,
+				A10000000000000000000013 /* KeyboardGameEnergy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

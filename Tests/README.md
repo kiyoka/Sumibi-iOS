@@ -13,3 +13,15 @@ swiftc -module-cache-path /private/tmp/sumibi-chat-test-cache \
   Tests/SettingsChatTests.swift -o /private/tmp/sumibi-settings-chat-tests
 /private/tmp/sumibi-settings-chat-tests
 ```
+
+## ゲーム演出のチャージ
+
+Issue #122のチャージ速度・上限・休止時の連続減衰・表示周期の違い・消費時刻・リセットを通信なしで確認します。
+上記の設定チャットテストには、ゲーム演出の初期OFF・保存・テーマ選択とON/OFFの独立性も含まれます。
+
+```sh
+swiftc -module-cache-path /private/tmp/sumibi-game-test-cache \
+  SumibiCore/KeyboardGameEnergy.swift Tests/KeyboardGameEnergyTests.swift \
+  -o /private/tmp/sumibi-game-energy-tests
+/private/tmp/sumibi-game-energy-tests
+```
