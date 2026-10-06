@@ -87,9 +87,15 @@ public struct ConversionPromptConfiguration: Codable, Equatable, Sendable {
 /// More themes can be added without coupling theme selection to the ON/OFF switch.
 public enum KeyboardGameTheme: String, CaseIterable, Identifiable, Sendable {
     case rpgDragon
+    case spaceLaser
 
     public var id: Self { self }
-    public var displayName: String { "RPG風ドラゴン" }
+    public var displayName: String {
+        switch self {
+        case .rpgDragon: "RPG風ドラゴン"
+        case .spaceLaser: "宇宙船のレーザー砲"
+        }
+    }
 }
 
 public struct SharedSettingsStore {
