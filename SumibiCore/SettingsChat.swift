@@ -146,6 +146,108 @@ public struct SettingsChatMessage: Encodable, Sendable {
     }
 }
 
+/// A read-only, point-in-time view of usage. No forecast is computed here.
+public struct SettingsChatUsageContext: Sendable {
+    public let statistics: [ModelUsageStatistics]
+    public let capturedAt: Date
+    public let timeZone: TimeZone
+
+    public init(
+        statistics: [ModelUsageStatistics],
+        capturedAt: Date = Date(),
+        timeZone: TimeZone = .current
+    ) {
+        self.statistics = statistics
+        self.capturedAt = capturedAt
+        self.timeZone = timeZone
+    }
+
+    func contextJSON() throws -> String {
+        struct ModelUsage: Encodable {
+            let model: String
+            let collectionStartedAt: String?
+            let conversionCount: Int
+            let settingsChatCount: Int
+            let inputTokens: Int
+            let cachedInputTokens: Int
+            let outputTokens: Int
+            let estimatedCostUSD: String?
+
+            enum CodingKeys: String, CodingKey {
+                case model, collectionStartedAt, conversionCount, settingsChatCount
+                case inputTokens, cachedInputTokens, outputTokens, estimatedCostUSD
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var values = encoder.container(keyedBy: CodingKeys.self)
+                try values.encode(model, forKey: .model)
+                // Explicit nulls distinguish missing history/pricing from zero cost.
+                try values.encode(collectionStartedAt, forKey: .collectionStartedAt)
+                try values.encode(conversionCount, forKey: .conversionCount)
+                try values.encode(settingsChatCount, forKey: .settingsChatCount)
+                try values.encode(inputTokens, forKey: .inputTokens)
+                try values.encode(cachedInputTokens, forKey: .cachedInputTokens)
+                try values.encode(outputTokens, forKey: .outputTokens)
+                try values.encode(estimatedCostUSD, forKey: .estimatedCostUSD)
+            }
+        }
+        struct Context: Encodable {
+            let capturedAt: String
+            let timeZone: String
+            let utcOffsetSeconds: Int
+            let currency = "USD"
+            let scope = "この端末のSumibiが記録した累積統計。今回の回答のAPI費用は未計上。他アプリ・他端末の利用、実際の請求額・残高は含まない。日別履歴はない。"
+            let models: [ModelUsage]
+            let knownCostSubtotalUSD: String
+            let modelsWithUnknownCost: [String]
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var subtotal = Decimal.zero
+        let models = statistics.map { row in
+            let cost = row.estimatedCostUSD
+            if let cost { subtotal += cost }
+            return ModelUsage(
+                model: row.model,
+                collectionStartedAt: row.collectionStartedAt.map { formatter.string(from: $0) },
+                conversionCount: row.conversionCount,
+                settingsChatCount: row.settingsChatCount,
+                inputTokens: row.inputTokens,
+                cachedInputTokens: row.cachedInputTokens,
+                outputTokens: row.outputTokens,
+                estimatedCostUSD: cost.map { NSDecimalNumber(decimal: $0).stringValue }
+            )
+        }
+        let context = Context(
+            capturedAt: formatter.string(from: capturedAt),
+            timeZone: timeZone.identifier,
+            utcOffsetSeconds: timeZone.secondsFromGMT(for: capturedAt),
+            models: models,
+            knownCostSubtotalUSD: NSDecimalNumber(decimal: subtotal).stringValue,
+            modelsWithUnknownCost: statistics.filter { $0.estimatedCostUSD == nil }.map(\.model)
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return String(decoding: try encoder.encode(context), as: UTF8.self)
+    }
+}
+
+enum SettingsChatHelp {
+    static let guide = """
+    SumibiはiPhone向けのAI日本語キーボード。英字QWERTYの1画面でローマ字を入力し「変換」を押して自然な日本語にする。自動変換や、かなキーボードへの切替は不要。
+    初期設定：SumibiアプリでAPIのURL・モデル・利用者が用意したAPIキーを設定し「設定を保存」。プライバシー欄で第三者AIへの送信に同意。iOSの設定 > 一般 > キーボード > キーボード > 新しいキーボードを追加でSumibiを追加し、Sumibiの「フルアクセスを許可」をON。入力アプリで地球儀からSumibiへ切り替える。
+    APIキーが必要な場合は利用者自身がAPI提供者で準備する。アプリのダウンロードは無料だが、設定したAPIの利用料金は別途かかる。Sumibi運営のサーバーは経由せず、設定した第三者AIへ直接送信する。
+    範囲変換：入力先アプリで変換したい文字列を選択し、Sumibiの「範囲を変換」を押す。選択した部分だけを変換する。選択がなければSumibiが追跡中の入力を変換する。例えば英語の文章の後にローマ字を入力し、そのローマ字部分だけを選択して変換できる。ホストアプリによって選択の扱いは異なる。
+    候補・Undo：初回は候補1件を反映。「さらに変換候補を取得」で別の表現や同音異義語などを追加取得できる（追加API通信あり）。候補バーの候補を押して切替。「Undo」で変換前の原文へ戻せる。候補が画面に収まらない場合は横にスクロールする。
+    記号入力：「記号」で記号一覧を開き、使いたい記号を押す。もう一度切替キーを押すと閉じる。通常のQWERTYキーは切り替えない。
+    ユーザー辞書：Sumibiアプリの「ユーザー辞書」を開き、1行につき「tari-zu = タリーズ」のように登録して保存。最大100件・2,000文字。登録辞書は変換リクエストへ送信される。チャットでは辞書を読んだり編集したりしない。
+    文体プリセット：Sumibiアプリの「文体プリセット」を開き、最大3件の名前付き追加プロンプトを登録できる。「使用するプリセット」で選択するか「使用しない」。各プリセットを開くと編集・効果の比較ができる。論文スタイルなどの文体・表記や出力言語を指定できる。チャットから選択・編集しない。
+    利用状況：Sumibiアプリの「利用状況」でモデルごとの集計開始、変換回数、設定チャット回数、トークン数、概算料金を確認。「利用状況をリセット」は確認後に端末の集計をリセットするだけで、API請求・残高は変わらない。
+    変換できない場合：保存したAPI設定、第三者AIへの同意、キーボードのフルアクセス、通信状況を確認し、Sumibiアプリの変換テストを使う。認証・利用上限はAPI提供者側も確認する。タイムアウトは15秒固定。
+    """
+}
+
 public struct SettingsChatCompletion: Sendable {
     public let content: String
     public let model: String

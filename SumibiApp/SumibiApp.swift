@@ -232,13 +232,13 @@ private struct ContentView: View {
                     loadUsageStatistics()
                 })
             } label: {
-                Label("チャットで設定", systemImage: "bubble.left.and.bubble.right")
+                Label("Sumibiに相談", systemImage: "bubble.left.and.bubble.right")
             }
             .disabled(!hasLoadedSettings || hasUnsavedAPISettings)
         } footer: {
             Text(hasUnsavedAPISettings
                  ? "API設定を保存してからチャットを開いてください。"
-                 : "モデル、音や振動を会話で変更できます。")
+                 : "使い方や概算費用を質問し、モデル、音や振動の設定を変更できます。")
         }
     }
 
@@ -431,7 +431,7 @@ private struct ContentView: View {
         } header: {
             Text("プライバシー")
         } footer: {
-            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書、変換プロンプトを上記の第三者AIへ送信します。設定チャットでは会話内容、変更対象の現在値を送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
+            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書、変換プロンプトを上記の第三者AIへ送信します。相談チャットでは会話内容、変更対象の現在値、モデル別の利用統計（集計開始日時・回数・トークン数・概算料金）を送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
         }
     }
 
