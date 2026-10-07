@@ -4,9 +4,11 @@ import ImageIO
 /// Shared interface keeps the energy model and keyboard actions independent of the artwork.
 @MainActor
 final class KeyboardGameEffectView: UIView {
+    enum Theme { case dragon, spaceship, cat }
     private let dragon = DragonGameEffectView()
     private let spaceship = SpaceLaserEffectView()
-    private var usesSpaceship = false
+    private let cat = CatHuntEffectView()
+    private var theme = Theme.dragon
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -14,7 +16,9 @@ final class KeyboardGameEffectView: UIView {
         accessibilityElementsHidden = true
         addSubview(dragon)
         addSubview(spaceship)
+        addSubview(cat)
         spaceship.isHidden = true
+        cat.isHidden = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -23,42 +27,55 @@ final class KeyboardGameEffectView: UIView {
         super.layoutSubviews()
         dragon.frame = bounds
         spaceship.frame = bounds
+        cat.frame = bounds
     }
 
-    func setSpaceshipEnabled(_ enabled: Bool) {
-        guard usesSpaceship != enabled else { return }
+    func setTheme(_ theme: Theme) {
+        guard self.theme != theme else { return }
         stop()
-        usesSpaceship = enabled
-        spaceship.isHidden = !enabled
-        dragon.isHidden = enabled
+        self.theme = theme
+        spaceship.isHidden = theme != .spaceship
+        dragon.isHidden = theme != .dragon
+        cat.isHidden = theme != .cat
     }
 
     func setCharge(_ level: Double, animated: Bool = true, pulsesCharacter: Bool = true) {
-        if usesSpaceship {
+        switch theme {
+        case .spaceship:
             spaceship.setCharge(level, animated: animated, pulsesCharacter: pulsesCharacter)
-        } else {
+        case .dragon:
             dragon.setCharge(level, animated: animated, pulsesDragon: pulsesCharacter)
+        case .cat:
+            cat.setCharge(level, animated: animated)
         }
     }
 
     func releaseEnergy(_ energy: Double) {
-        if usesSpaceship { spaceship.releaseEnergy(energy) }
-        else { dragon.breatheFire(energy: energy) }
+        switch theme {
+        case .spaceship: spaceship.releaseEnergy(energy)
+        case .dragon: dragon.breatheFire(energy: energy)
+        case .cat: cat.releaseEnergy(energy)
+        }
     }
 
     func fadeRelease() {
-        if usesSpaceship { spaceship.fadeRelease() }
-        else { dragon.fadeFire() }
+        switch theme {
+        case .spaceship: spaceship.fadeRelease()
+        case .dragon: dragon.fadeFire()
+        case .cat: cat.fadeRelease()
+        }
     }
 
     func stop() {
         dragon.stop()
         spaceship.stop()
+        cat.stop()
     }
 
     func reduceMotionChanged() {
         dragon.reduceMotionChanged()
         spaceship.reduceMotionChanged()
+        cat.reduceMotionChanged()
     }
 }
 

@@ -88,12 +88,14 @@ public struct ConversionPromptConfiguration: Codable, Equatable, Sendable {
 public enum KeyboardGameTheme: String, CaseIterable, Identifiable, Sendable {
     case rpgDragon
     case spaceLaser
+    case persianCat
 
     public var id: Self { self }
     public var displayName: String {
         switch self {
         case .rpgDragon: "RPG風ドラゴン"
         case .spaceLaser: "宇宙船のレーザー砲"
+        case .persianCat: "獲物を狙うペルシャ猫"
         }
     }
 }

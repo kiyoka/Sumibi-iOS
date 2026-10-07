@@ -30,6 +30,10 @@
 		A10000000000000000000015 /* RPGDragon.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* RPGDragon.png */; };
 		A10000000000000000000016 /* SpaceLaserEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* SpaceLaserEffectView.swift */; };
 		A10000000000000000000017 /* SpaceLaserShip.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* SpaceLaserShip.png */; };
+		A10000000000000000000018 /* CatHuntEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* CatHuntEffectView.swift */; };
+		A10000000000000000000019 /* PersianCatHunt.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* PersianCatHunt.png */; };
+		A1000000000000000000001A /* PersianCatRun.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* PersianCatRun.png */; };
+		A1000000000000000000001B /* PersianCatCatch.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* PersianCatCatch.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,6 +100,10 @@
 		A20000000000000000000017 /* RPGDragon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = RPGDragon.png; sourceTree = "<group>"; };
 		A20000000000000000000018 /* SpaceLaserEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceLaserEffectView.swift; sourceTree = "<group>"; };
 		A20000000000000000000019 /* SpaceLaserShip.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = SpaceLaserShip.png; sourceTree = "<group>"; };
+		A2000000000000000000001A /* CatHuntEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatHuntEffectView.swift; sourceTree = "<group>"; };
+		A2000000000000000000001B /* PersianCatHunt.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = PersianCatHunt.png; sourceTree = "<group>"; };
+		A2000000000000000000001C /* PersianCatRun.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = PersianCatRun.png; sourceTree = "<group>"; };
+		A2000000000000000000001D /* PersianCatCatch.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = PersianCatCatch.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +163,10 @@
 				A20000000000000000000016 /* DragonGameEffectView.swift */,
 				A20000000000000000000018 /* SpaceLaserEffectView.swift */,
 				A20000000000000000000019 /* SpaceLaserShip.png */,
+				A2000000000000000000001A /* CatHuntEffectView.swift */,
+				A2000000000000000000001B /* PersianCatHunt.png */,
+				A2000000000000000000001C /* PersianCatRun.png */,
+				A2000000000000000000001D /* PersianCatCatch.png */,
 				A20000000000000000000002 /* KeyboardViewController.swift */,
 				A20000000000000000000004 /* Info.plist */,
 				A2000000000000000000000A /* SumibiKeyboard.entitlements */,
@@ -304,6 +316,9 @@
 				A1000000000000000000000F /* KeyboardIcon.png in Resources */,
 				A10000000000000000000015 /* RPGDragon.png in Resources */,
 				A10000000000000000000017 /* SpaceLaserShip.png in Resources */,
+				A10000000000000000000019 /* PersianCatHunt.png in Resources */,
+				A1000000000000000000001A /* PersianCatRun.png in Resources */,
+				A1000000000000000000001B /* PersianCatCatch.png in Resources */,
 				A1000000000000000000000D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -334,6 +349,7 @@
 				A10000000000000000000002 /* KeyboardViewController.swift in Sources */,
 				A10000000000000000000014 /* DragonGameEffectView.swift in Sources */,
 				A10000000000000000000016 /* SpaceLaserEffectView.swift in Sources */,
+				A10000000000000000000018 /* CatHuntEffectView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

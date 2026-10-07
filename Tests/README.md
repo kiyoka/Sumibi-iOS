@@ -25,3 +25,14 @@ swiftc -module-cache-path /private/tmp/sumibi-game-test-cache \
   -o /private/tmp/sumibi-game-energy-tests
 /private/tmp/sumibi-game-energy-tests
 ```
+
+## 猫のダッシュ
+
+蓄積量に応じた速度、走り出し、移動の単調性、4コマの切替、おもちゃをくわえた後の2秒間の静止・正面ポーズ、フェード、終了、不正値を確認します。
+
+```sh
+swiftc -module-cache-path /private/tmp/sumibi-cat-test-cache \
+  SumibiKeyboard/CatHuntEffectView.swift Tests/CatRunMotionTests.swift \
+  -o /private/tmp/sumibi-cat-motion-tests
+/private/tmp/sumibi-cat-motion-tests
+```

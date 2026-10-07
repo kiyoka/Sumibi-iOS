@@ -213,6 +213,8 @@ final class KeyboardViewController: UIInputViewController {
     private let gameEffect = KeyboardGameEffectView()
     private weak var candidateIconView: UIImageView?
     private var candidateIconWidthConstraint: NSLayoutConstraint?
+    private var candidateStripTrailingConstraint: NSLayoutConstraint?
+    private var candidateMessageTrailingConstraint: NSLayoutConstraint?
     private var gameEnergy = KeyboardGameEnergy()
     private var gameEnergyTimer: Timer?
     private var gameDocumentIdentifier: UUID?
@@ -516,6 +518,10 @@ final class KeyboardViewController: UIInputViewController {
         candidateIconView = iconView
         let iconWidth = iconView.widthAnchor.constraint(equalToConstant: 28)
         candidateIconWidthConstraint = iconWidth
+        let stripTrailing = candidateStrip.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8)
+        let messageTrailing = candidateMessageStack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8)
+        candidateStripTrailingConstraint = stripTrailing
+        candidateMessageTrailingConstraint = messageTrailing
         NSLayoutConstraint.activate([
             gameEffect.topAnchor.constraint(equalTo: container.topAnchor),
             gameEffect.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -527,17 +533,14 @@ final class KeyboardViewController: UIInputViewController {
             iconView.heightAnchor.constraint(equalToConstant: 28),
             candidateStrip.topAnchor.constraint(equalTo: container.topAnchor),
             candidateStrip.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
-            candidateStrip.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            stripTrailing,
             candidateStrip.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             candidateMessageStack.topAnchor.constraint(equalTo: container.topAnchor),
             candidateMessageStack.leadingAnchor.constraint(
                 equalTo: iconView.trailingAnchor,
                 constant: 6
             ),
-            candidateMessageStack.trailingAnchor.constraint(
-                lessThanOrEqualTo: container.trailingAnchor,
-                constant: -8
-            ),
+            messageTrailing,
             candidateMessageStack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
         return container
@@ -1469,10 +1472,18 @@ final class KeyboardViewController: UIInputViewController {
         gameEnergy.reset()
         gameDocumentIdentifier = nil
         gameEffect.stop()
-        gameEffect.setSpaceshipEnabled(theme == .spaceLaser)
+        switch theme {
+        case .rpgDragon: gameEffect.setTheme(.dragon)
+        case .spaceLaser: gameEffect.setTheme(.spaceship)
+        case .persianCat: gameEffect.setTheme(.cat)
+        }
         gameEffect.isHidden = !enabled
         candidateIconView?.isHidden = enabled
         candidateIconWidthConstraint?.constant = enabled ? 44 : 28
+        // Leave the right-edge prey/captured cat visible without covering candidate buttons.
+        let trailingInset: CGFloat = enabled && theme == .persianCat ? 54 : 8
+        candidateStripTrailingConstraint?.constant = -trailingInset
+        candidateMessageTrailingConstraint?.constant = -trailingInset
         for case let label as CandidateStatusLabel in candidateMessageStack.arrangedSubviews {
             label.hasGameBackground = enabled
         }
