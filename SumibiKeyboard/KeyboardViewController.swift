@@ -211,6 +211,7 @@ final class KeyboardViewController: UIInputViewController {
     private weak var candidateStripView: HorizontalCandidateStripView?
     private var candidateBarShimmerView: UIView?
     private let gameEffect = KeyboardGameEffectView()
+    private weak var gameCharacterButton: UIButton?
     private weak var candidateIconView: UIImageView?
     private var candidateIconWidthConstraint: NSLayoutConstraint?
     private var candidateStripTrailingConstraint: NSLayoutConstraint?
@@ -514,6 +515,15 @@ final class KeyboardViewController: UIInputViewController {
         container.insertSubview(gameEffect, at: 0)
         container.addSubview(candidateStrip)
         container.addSubview(candidateMessageStack)
+        // Only the reserved character area is tappable; never intercept candidate scrolling.
+        let characterButton = UIButton(type: .custom)
+        characterButton.translatesAutoresizingMaskIntoConstraints = false
+        characterButton.accessibilityIdentifier = "game-character-theme-cycle"
+        characterButton.accessibilityLabel = "ゲームのキャラクターを切り替え"
+        characterButton.isHidden = true
+        characterButton.addTarget(self, action: #selector(gameCharacterTapped), for: .touchUpInside)
+        container.addSubview(characterButton)
+        gameCharacterButton = characterButton
         candidateStripView = candidateStrip
         candidateIconView = iconView
         let iconWidth = iconView.widthAnchor.constraint(equalToConstant: 28)
@@ -527,6 +537,10 @@ final class KeyboardViewController: UIInputViewController {
             gameEffect.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             gameEffect.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             gameEffect.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            characterButton.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            characterButton.trailingAnchor.constraint(equalTo: candidateStrip.leadingAnchor),
+            characterButton.topAnchor.constraint(equalTo: container.topAnchor),
+            characterButton.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 6),
             iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             iconWidth,
@@ -1481,6 +1495,10 @@ final class KeyboardViewController: UIInputViewController {
         }
         gameEffect.isHidden = !enabled
         candidateIconView?.isHidden = enabled
+        gameCharacterButton?.isHidden = !enabled
+        gameCharacterButton?.isEnabled = enabled
+        gameCharacterButton?.accessibilityValue = theme.displayName
+        gameCharacterButton?.accessibilityHint = "タップすると\(theme.next.displayName)に切り替えます"
         // Keep the wizard's white circle clear of status text and candidate buttons.
         candidateIconWidthConstraint?.constant = enabled ? (theme == .rpgWizard ? 72 : 44) : 28
         // Leave the right-edge prey/captured cat visible without covering candidate buttons.
@@ -1491,6 +1509,15 @@ final class KeyboardViewController: UIInputViewController {
             label.hasGameBackground = enabled
         }
         if enabled { stopCandidateBarShimmer() }
+    }
+
+    @objc private func gameCharacterTapped() {
+        refreshGamePreferences()
+        guard isGameModeEnabled, let sharedSettings else { return }
+        sharedSettings.saveKeyboardGameTheme(gameTheme.next)
+        // Clears only the old artwork/energy, not composition, candidates or the API request.
+        refreshGamePreferences()
+        UIAccessibility.post(notification: .announcement, argument: gameTheme.displayName)
     }
 
     private func beginGameConversionEffect() {

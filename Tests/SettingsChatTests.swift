@@ -74,6 +74,17 @@ private struct SettingsChatTests {
             store.saveKeyboardGameModeEnabled(false)
         }
         expect(KeyboardGameTheme.allCases.count == 5, "All implemented themes must be selectable")
+        let cycle: [KeyboardGameTheme] = [.rpgDragon, .spaceLaser, .persianCat, .rpgArcher, .rpgWizard]
+        expect(KeyboardGameTheme.allCases == cycle, "Picker and tap cycle must share the specified order")
+        for enabled in [false, true] {
+            store.saveKeyboardGameModeEnabled(enabled)
+            store.saveKeyboardGameTheme(.rpgDragon)
+            for index in 1...10 {
+                store.saveKeyboardGameTheme(reloaded.loadKeyboardGameTheme().next)
+                expect(reloaded.loadKeyboardGameTheme() == cycle[index % cycle.count], "Cycle must persist and wrap over two rounds")
+                expect(reloaded.loadKeyboardGameModeEnabled() == enabled, "Cycling must not change ON/OFF")
+            }
+        }
         expect(KeyboardGameTheme.rpgArcher.displayName == "弓使いのチャージショット", "Picker must identify archer")
         expect(KeyboardGameTheme.rpgWizard.displayName == "魔法使いの白い魔法陣", "Picker must identify wizard")
         expect(KeyboardGameTheme.persianCat.displayName == "獲物を狙うペルシャ猫", "Picker must identify cat")

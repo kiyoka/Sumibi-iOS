@@ -82,6 +82,10 @@ private struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     loadUsageStatistics()
+                    if let store = SharedSettingsStore() {
+                        keyboardGameModeEnabled = store.loadKeyboardGameModeEnabled()
+                        keyboardGameTheme = store.loadKeyboardGameTheme()
+                    }
                 }
             }
             .onChange(of: endpoint) { _, newEndpoint in

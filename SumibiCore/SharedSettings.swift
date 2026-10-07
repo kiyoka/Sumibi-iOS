@@ -93,6 +93,11 @@ public enum KeyboardGameTheme: String, CaseIterable, Identifiable, Sendable {
     case rpgWizard
 
     public var id: Self { self }
+    public var next: Self {
+        let themes = Self.allCases
+        guard let index = themes.firstIndex(of: self) else { return .rpgDragon }
+        return themes[(index + 1) % themes.count]
+    }
     public var displayName: String {
         switch self {
         case .rpgDragon: "RPG風ドラゴン"
