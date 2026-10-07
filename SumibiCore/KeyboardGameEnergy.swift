@@ -3,7 +3,7 @@ import Foundation
 /// Timing-only state. Never receives, stores, or transmits the typed text.
 public struct KeyboardGameEnergy: Sendable {
     public static let inactivityDelay: TimeInterval = 0.3
-    public static let decayPerSecond: Double = 0.32
+    public static let decayPerSecond: Double = 0.16
     public private(set) var level: Double = 0
     private var lastKeystroke: TimeInterval?
     private var lastUpdate: TimeInterval?

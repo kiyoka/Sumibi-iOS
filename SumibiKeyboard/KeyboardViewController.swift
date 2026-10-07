@@ -1476,10 +1476,13 @@ final class KeyboardViewController: UIInputViewController {
         case .rpgDragon: gameEffect.setTheme(.dragon)
         case .spaceLaser: gameEffect.setTheme(.spaceship)
         case .persianCat: gameEffect.setTheme(.cat)
+        case .rpgArcher: gameEffect.setTheme(.archer)
+        case .rpgWizard: gameEffect.setTheme(.wizard)
         }
         gameEffect.isHidden = !enabled
         candidateIconView?.isHidden = enabled
-        candidateIconWidthConstraint?.constant = enabled ? 44 : 28
+        // Keep the wizard's white circle clear of status text and candidate buttons.
+        candidateIconWidthConstraint?.constant = enabled ? (theme == .rpgWizard ? 72 : 44) : 28
         // Leave the right-edge prey/captured cat visible without covering candidate buttons.
         let trailingInset: CGFloat = enabled && theme == .persianCat ? 54 : 8
         candidateStripTrailingConstraint?.constant = -trailingInset

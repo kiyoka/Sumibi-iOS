@@ -6,6 +6,7 @@ private struct KeyboardGameEnergyTests {
         var slow = KeyboardGameEnergy()
         var medium = KeyboardGameEnergy()
         var fast = KeyboardGameEnergy()
+        precondition(KeyboardGameEnergy.decayPerSecond == 0.16, "Idle drain must be half the original speed")
         precondition(fast.level == 0)
         for index in 0..<8 {
             slow.recordKeystroke(at: Double(index))
@@ -20,9 +21,9 @@ private struct KeyboardGameEnergyTests {
         precondition(abs(fast.level - retained) < 0.00001, "A short pause must not drain charge")
         var fading = fast
         fading.update(at: 1.1)
-        precondition(abs(fading.level - (retained - 0.032)) < 0.00001, "Drain should start after the grace period")
+        precondition(abs(fading.level - (retained - 0.016)) < 0.00001, "Drain should start after the grace period")
         fading.update(at: 1.2)
-        precondition(abs(fading.level - (retained - 0.064)) < 0.00001, "Drain must continue smoothly")
+        precondition(abs(fading.level - (retained - 0.032)) < 0.00001, "Drain must continue smoothly")
         fading.update(at: 100)
         precondition(fading.level == 0, "An idle meter must eventually empty, not become negative")
         let released = fast.consume(at: 0.9)
@@ -50,10 +51,15 @@ private struct KeyboardGameEnergyTests {
         for frame in 1...60 { fine.update(at: lastTap + Double(frame) / 30) }
         precondition(abs(coarse.level - fine.level) < 0.00001,
                      "Decay must not depend on the timer frame rate")
-        precondition(abs(coarse.level - 0.456) < 0.00001)
+        precondition(abs(coarse.level - 0.728) < 0.00001)
+        var halfSpeed = fast
+        halfSpeed.update(at: lastTap + 3.425)
+        precondition(abs(halfSpeed.level - 0.5) < 0.00001, "Half a full meter drains in 3.125 seconds after grace")
+        halfSpeed.update(at: lastTap + 6.56)
+        precondition(halfSpeed.level == 0, "A full meter should empty after about 6.55 seconds including grace")
         var lateConversion = fast
         let lateRelease = lateConversion.consume(at: lastTap + 1.3)
-        precondition(abs(lateRelease - 0.68) < 0.00001,
+        precondition(abs(lateRelease - 0.84) < 0.00001,
                      "Conversion must use the energy at tap time, even without a recent timer tick")
         precondition(lateConversion.level == 0)
         fast.reset()

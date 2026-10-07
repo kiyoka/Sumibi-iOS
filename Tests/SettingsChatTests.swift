@@ -65,7 +65,17 @@ private struct SettingsChatTests {
         store.saveKeyboardGameTheme(.persianCat)
         expect(reloaded.loadKeyboardGameTheme() == .persianCat, "Cat theme must persist")
         expect(!reloaded.loadKeyboardGameModeEnabled(), "Selecting cat must preserve OFF")
-        expect(KeyboardGameTheme.allCases.count == 3, "All implemented themes must be selectable")
+        for theme in [KeyboardGameTheme.rpgArcher, .rpgWizard] {
+            store.saveKeyboardGameTheme(theme)
+            expect(reloaded.loadKeyboardGameTheme() == theme, "New fantasy themes must persist")
+            expect(!reloaded.loadKeyboardGameModeEnabled(), "New themes must preserve OFF")
+            store.saveKeyboardGameModeEnabled(true)
+            expect(reloaded.loadKeyboardGameTheme() == theme, "Enabling must preserve fantasy theme")
+            store.saveKeyboardGameModeEnabled(false)
+        }
+        expect(KeyboardGameTheme.allCases.count == 5, "All implemented themes must be selectable")
+        expect(KeyboardGameTheme.rpgArcher.displayName == "弓使いのチャージショット", "Picker must identify archer")
+        expect(KeyboardGameTheme.rpgWizard.displayName == "魔法使いの白い魔法陣", "Picker must identify wizard")
         expect(KeyboardGameTheme.persianCat.displayName == "獲物を狙うペルシャ猫", "Picker must identify cat")
         expect(KeyboardGameTheme.spaceLaser.displayName == "宇宙船のレーザー砲", "Picker must identify spaceship")
         defaults.set("future-theme", forKey: "keyboardGameTheme")

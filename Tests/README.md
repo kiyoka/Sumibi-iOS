@@ -36,3 +36,14 @@ swiftc -module-cache-path /private/tmp/sumibi-cat-test-cache \
   -o /private/tmp/sumibi-cat-motion-tests
 /private/tmp/sumibi-cat-motion-tests
 ```
+
+## 弓使い・魔法使い
+
+予備動作・チャージ量に応じた速度・移動の単調性・終了・フェード・不正値、大きな弓の引き動作と汗の開始・周期・停止を確認します。設定チャットのテストには5テーマの保存と初期OFFも含まれます。
+
+```sh
+swiftc -module-cache-path /private/tmp/sumibi-fantasy-test-cache \
+  SumibiKeyboard/FantasyGameEffectView.swift Tests/FantasyShotMotionTests.swift \
+  -o /private/tmp/sumibi-fantasy-motion-tests
+/private/tmp/sumibi-fantasy-motion-tests
+```

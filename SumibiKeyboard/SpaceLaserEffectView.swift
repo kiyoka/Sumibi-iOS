@@ -4,10 +4,12 @@ import ImageIO
 /// Shared interface keeps the energy model and keyboard actions independent of the artwork.
 @MainActor
 final class KeyboardGameEffectView: UIView {
-    enum Theme { case dragon, spaceship, cat }
+    enum Theme { case dragon, spaceship, cat, archer, wizard }
     private let dragon = DragonGameEffectView()
     private let spaceship = SpaceLaserEffectView()
     private let cat = CatHuntEffectView()
+    private let archer = FantasyGameEffectView(kind: .archer)
+    private let wizard = FantasyGameEffectView(kind: .wizard)
     private var theme = Theme.dragon
 
     override init(frame: CGRect) {
@@ -17,8 +19,12 @@ final class KeyboardGameEffectView: UIView {
         addSubview(dragon)
         addSubview(spaceship)
         addSubview(cat)
+        addSubview(archer)
+        addSubview(wizard)
         spaceship.isHidden = true
         cat.isHidden = true
+        archer.isHidden = true
+        wizard.isHidden = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -28,6 +34,8 @@ final class KeyboardGameEffectView: UIView {
         dragon.frame = bounds
         spaceship.frame = bounds
         cat.frame = bounds
+        archer.frame = bounds
+        wizard.frame = bounds
     }
 
     func setTheme(_ theme: Theme) {
@@ -37,6 +45,8 @@ final class KeyboardGameEffectView: UIView {
         spaceship.isHidden = theme != .spaceship
         dragon.isHidden = theme != .dragon
         cat.isHidden = theme != .cat
+        archer.isHidden = theme != .archer
+        wizard.isHidden = theme != .wizard
     }
 
     func setCharge(_ level: Double, animated: Bool = true, pulsesCharacter: Bool = true) {
@@ -47,6 +57,10 @@ final class KeyboardGameEffectView: UIView {
             dragon.setCharge(level, animated: animated, pulsesDragon: pulsesCharacter)
         case .cat:
             cat.setCharge(level, animated: animated)
+        case .archer:
+            archer.setCharge(level, animated: animated)
+        case .wizard:
+            wizard.setCharge(level, animated: animated)
         }
     }
 
@@ -55,6 +69,8 @@ final class KeyboardGameEffectView: UIView {
         case .spaceship: spaceship.releaseEnergy(energy)
         case .dragon: dragon.breatheFire(energy: energy)
         case .cat: cat.releaseEnergy(energy)
+        case .archer: archer.releaseEnergy(energy)
+        case .wizard: wizard.releaseEnergy(energy)
         }
     }
 
@@ -63,6 +79,8 @@ final class KeyboardGameEffectView: UIView {
         case .spaceship: spaceship.fadeRelease()
         case .dragon: dragon.fadeFire()
         case .cat: cat.fadeRelease()
+        case .archer: archer.fadeRelease()
+        case .wizard: wizard.fadeRelease()
         }
     }
 
@@ -70,12 +88,16 @@ final class KeyboardGameEffectView: UIView {
         dragon.stop()
         spaceship.stop()
         cat.stop()
+        archer.stop()
+        wizard.stop()
     }
 
     func reduceMotionChanged() {
         dragon.reduceMotionChanged()
         spaceship.reduceMotionChanged()
         cat.reduceMotionChanged()
+        archer.reduceMotionChanged()
+        wizard.reduceMotionChanged()
     }
 }
 
