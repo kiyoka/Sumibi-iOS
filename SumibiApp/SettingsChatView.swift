@@ -49,6 +49,7 @@ struct SettingsChatView: View {
 
     private let examples = [
         "Sumibiの使い方を教えて",
+        "遊び心のあるキーボードについて教えて",
         "今どれくらい費用がかかっていますか？",
         "今後15日でどれくらい費用がかかりそうですか？",
         "今の2倍使ったら、今後1週間の費用はどれくらい？",
@@ -99,7 +100,7 @@ struct SettingsChatView: View {
 
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("使い方や概算費用を質問できます。モデル、音や振動の設定変更もできます。")
+            Text("使い方、遊び心のあるキーボード、概算費用を質問できます。モデル、音や振動の設定変更もできます。")
             Text("変更内容を確認し、「適用する」を押すと保存されます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
