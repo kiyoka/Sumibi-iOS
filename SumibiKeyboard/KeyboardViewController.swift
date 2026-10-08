@@ -1517,7 +1517,6 @@ final class KeyboardViewController: UIInputViewController {
         case .rpgDragon: gameEffect.setTheme(.dragon)
         case .spaceLaser: gameEffect.setTheme(.spaceship)
         case .persianCat: gameEffect.setTheme(.cat)
-        case .rpgArcher: gameEffect.setTheme(.archer)
         case .rpgWizard: gameEffect.setTheme(.wizard)
         }
         gameEffect.isHidden = !enabled
