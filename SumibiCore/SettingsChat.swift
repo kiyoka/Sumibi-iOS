@@ -245,8 +245,6 @@ enum SettingsChatHelp {
                 description = "宇宙船のコアが光り、ためた力に応じて光弾や太いレーザーを放つ。"
             case .persianCat:
                 description = "ペルシャ猫がお尻をふりふりしてピンクのボールを狙い、変換で右へダッシュ。ボールをくわえて大きな正面ポーズで約2秒こちらを見る。本物の動物を捕まえる演出ではない。"
-            case .rpgArcher:
-                description = "身長ほどの大きな弓を引き、引き切る手前から汗を飛ばし、変換で矢を放つ。"
             case .rpgWizard:
                 description = "魔法使いが白い魔法陣に力をため、変換で魔法を放つ。"
             }

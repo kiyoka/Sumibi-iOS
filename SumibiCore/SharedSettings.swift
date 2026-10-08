@@ -89,7 +89,6 @@ public enum KeyboardGameTheme: String, CaseIterable, Identifiable, Sendable {
     case rpgDragon
     case spaceLaser
     case persianCat
-    case rpgArcher
     case rpgWizard
 
     public var id: Self { self }
@@ -103,7 +102,6 @@ public enum KeyboardGameTheme: String, CaseIterable, Identifiable, Sendable {
         case .rpgDragon: "RPG風ドラゴン"
         case .spaceLaser: "宇宙船のレーザー砲"
         case .persianCat: "獲物を狙うペルシャ猫"
-        case .rpgArcher: "弓使いのチャージショット"
         case .rpgWizard: "魔法使いの白い魔法陣"
         }
     }
@@ -251,6 +249,7 @@ public struct SharedSettingsStore {
     }
 
     public func loadKeyboardGameTheme() -> KeyboardGameTheme {
+        // Removed themes (including the former archer) use the default without changing ON/OFF.
         defaults.string(forKey: Key.keyboardGameTheme)
             .flatMap(KeyboardGameTheme.init(rawValue:)) ?? .rpgDragon
     }

@@ -65,7 +65,7 @@ private struct SettingsChatTests {
         store.saveKeyboardGameTheme(.persianCat)
         expect(reloaded.loadKeyboardGameTheme() == .persianCat, "Cat theme must persist")
         expect(!reloaded.loadKeyboardGameModeEnabled(), "Selecting cat must preserve OFF")
-        for theme in [KeyboardGameTheme.rpgArcher, .rpgWizard] {
+        for theme in [KeyboardGameTheme.rpgWizard] {
             store.saveKeyboardGameTheme(theme)
             expect(reloaded.loadKeyboardGameTheme() == theme, "New fantasy themes must persist")
             expect(!reloaded.loadKeyboardGameModeEnabled(), "New themes must preserve OFF")
@@ -73,19 +73,27 @@ private struct SettingsChatTests {
             expect(reloaded.loadKeyboardGameTheme() == theme, "Enabling must preserve fantasy theme")
             store.saveKeyboardGameModeEnabled(false)
         }
-        expect(KeyboardGameTheme.allCases.count == 5, "All implemented themes must be selectable")
-        let cycle: [KeyboardGameTheme] = [.rpgDragon, .spaceLaser, .persianCat, .rpgArcher, .rpgWizard]
+        expect(KeyboardGameTheme.allCases.count == 4, "Only the four supported themes must be selectable")
+        let cycle: [KeyboardGameTheme] = [.rpgDragon, .spaceLaser, .persianCat, .rpgWizard]
         expect(KeyboardGameTheme.allCases == cycle, "Picker and tap cycle must share the specified order")
         for enabled in [false, true] {
             store.saveKeyboardGameModeEnabled(enabled)
             store.saveKeyboardGameTheme(.rpgDragon)
-            for index in 1...10 {
+            for index in 1...(cycle.count * 2) {
                 store.saveKeyboardGameTheme(reloaded.loadKeyboardGameTheme().next)
                 expect(reloaded.loadKeyboardGameTheme() == cycle[index % cycle.count], "Cycle must persist and wrap over two rounds")
                 expect(reloaded.loadKeyboardGameModeEnabled() == enabled, "Cycling must not change ON/OFF")
             }
         }
-        expect(KeyboardGameTheme.rpgArcher.displayName == "弓使いのチャージショット", "Picker must identify archer")
+        expect(KeyboardGameTheme(rawValue: "rpgArcher") == nil, "Removed archer remains selectable")
+        for enabled in [false, true] {
+            store.saveKeyboardGameModeEnabled(enabled)
+            defaults.set("rpgArcher", forKey: "keyboardGameTheme")
+            expect(reloaded.loadKeyboardGameTheme() == .rpgDragon, "Saved archer must fall back to dragon")
+            expect(reloaded.loadKeyboardGameModeEnabled() == enabled, "Fallback must preserve ON/OFF")
+            store.saveKeyboardGameTheme(reloaded.loadKeyboardGameTheme().next)
+            expect(reloaded.loadKeyboardGameTheme() == .spaceLaser, "Tap after removed theme must use four-theme cycle")
+        }
         expect(KeyboardGameTheme.rpgWizard.displayName == "魔法使いの白い魔法陣", "Picker must identify wizard")
         expect(KeyboardGameTheme.persianCat.displayName == "獲物を狙うペルシャ猫", "Picker must identify cat")
         expect(KeyboardGameTheme.spaceLaser.displayName == "宇宙船のレーザー砲", "Picker must identify spaceship")
@@ -371,7 +379,7 @@ private struct SettingsChatTests {
             ("2倍使ったら今後1週間は？", "追加約1.4 USDです。"),
             ("範囲だけ変換するには？", "文字列を選択して「範囲を変換」を押してください。"),
             ("遊び心のあるキーボードについて教えて", "打鍵でエネルギーをため、変換で放出する任意のゲーム風演出です。設定からONにできます。"),
-            ("どんなキャラクターを選べる？", "ドラゴン、宇宙船、ペルシャ猫、弓使い、魔法使いを選べます。"),
+            ("どんなキャラクターを選べる？", "ドラゴン、宇宙船、ペルシャ猫、魔法使いの4種類を選べます。"),
             ("猫にして", "前の設定画面の「遊び心のあるキーボード」でテーマから「獲物を狙うペルシャ猫」を選んでください。未使用ならゲーム演出もONにしてください。"),
             ("キャラクターをタップするとどうなる？", "候補バー左端のキャラクターをタップすると次のテーマへ切り替わり、一周すると最初に戻ります。"),
             ("遊ぶと料金や変換精度は変わる？", "演出自体では追加API通信は発生せず、変換結果や料金は変わりません。ただし通常の変換・相談にはAPI利用料金が発生します。"),
@@ -403,6 +411,8 @@ private struct SettingsChatTests {
                     expect(instructions.contains(required), "Consultation instructions missing: \(required)")
                 }
                 let themeNames = KeyboardGameTheme.allCases.map(\.displayName)
+                expect(!instructions.contains("弓使い") && !instructions.contains("5テーマ"),
+                       "Consultation still advertises the removed theme")
                 let themeLines = instructions.components(separatedBy: "\n").filter { $0.hasPrefix("・") }
                 expect(themeLines.count == themeNames.count, "Theme catalog duplicated or incomplete")
                 for (line, name) in zip(themeLines, themeNames) {
