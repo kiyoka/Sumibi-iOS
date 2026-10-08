@@ -14,6 +14,8 @@ final class KeyboardGameEffectView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
         isUserInteractionEnabled = false
         accessibilityElementsHidden = true
         addSubview(dragon)
@@ -28,6 +30,11 @@ final class KeyboardGameEffectView: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configureCatCelebration(in host: UIView, onChange: @escaping (Bool) -> Void) {
+        cat.celebrationHost = host
+        cat.onCelebrationChanged = onChange
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()

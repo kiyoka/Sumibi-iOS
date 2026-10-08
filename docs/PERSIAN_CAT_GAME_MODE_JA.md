@@ -9,10 +9,12 @@
 追加の写真に合わせて濃い眉のような線を減らし、優しい目元に調整する。
 元の写真・室内・写真の個人情報はリポジトリにもアプリにも含めず、生成した透過画像だけを使う。
 
-- 入力中は左側で低く構え、右側の小さなドット絵の布製おもちゃを狙う。水色・ピンクの帯・黄色いひもで、本物の動物ではないと分かる見た目にする。
-- エネルギーが残っている間はお尻・しっぽをふりふりし、頭・前足の動きは控える。
+- 入力中は左側で低く構え、右側の小さなドット絵のピンクのボールを狙う。本物の動物ではないおもちゃにする。
+- エネルギーが残っている間は、後ろ脚・腰・しっぽを描き分けた9コマでお尻をふりふりする。同じ画像のメッシュ変形は使わない。
+- 中間のポーズを往復する14ステップのループを12〜24コマ/秒で再生する。打鍵の勢いで速くなり、ゲージが減る間も再生位置を保持する。
 - 通常変換・範囲変換の通信開始で右へ走る。しっぽを上げた4コマの走りをループする。
-- 右端に到達すると同じ布製おもちゃをくわえる正面ポーズに変わり、こちらを見たまま2秒間静止する。
+- 右端に到達すると同じピンクのボールをくわえる正面ポーズに変わり、こちらを見たまま2秒間静止する。
+- 決めポーズだけは通常の縦横2倍（縦向き72pt・横向き56pt）で右上に表示する。下端と右端を候補帯内に置き、上方向へ広げる。
 - 蓄積量が多いほど走る速度・コマの切替速度・足元の小さなほこりを強める。
 - 短い走り出し（0.08秒）の後に加速し、約0.68〜1.03秒で右端に到達する。2秒間こちらを見て、最後0.18秒でフェードする。
 - 終了後は左側の構えに戻る。入力再開・キャンセルでは0.28秒でフェードし、前の演出が残らないようにする。
@@ -21,7 +23,9 @@
 - 「視差効果を減らす」ONでは猫は静止し、ゲージの値だけ更新する。
 
 候補帯は縦40pt・横32ptのまま。猫は候補・ステータス文字の背面で描画し、操作を受け取らない。
-猫テーマのみ、候補一覧とメッセージの右端余白を8ptから54ptにして獲物と捕獲後のポーズを見えるようにする。候補は従来通り横へスクロールできる。他のテーマとOFF時は8ptのまま。
+猫テーマONのときだけ上部に36pt／28ptの余白を確保し、キーボード全体は388pt／244ptになる（記号展開分は従来通り加算）。打鍵中も同じ高さにし、決めポーズのたびに入力欄の高さが変わることを防ぐ。キーの大きさ・候補帯の高さは変更しない。
+候補帯のクリップは常に維持する。決めポーズの間だけ猫をキーボード直下の透明・操作を受け取らないオーバーレイへ移す。キーボード全体のクリップも維持し、右上のポーズを入力欄にはみ出させない。候補のガラス描画と猫の拡大領域を分離する。
+候補一覧とメッセージの右端余白は、決めポーズ中だけ縦向き88pt・横向き72ptにして2倍の猫と重ならないようにする。自然終了・キャンセル・停止後は猫を候補帯へ戻し、余白も従来の54ptへ戻す。候補は従来通り横へスクロールできる。他のテーマとOFF時は8ptのままで、キーボードの高さも元へ戻す。
 チャージ速度・入力休止時の減衰はドラゴン・宇宙船と同じ。入力内容は演出に渡さず、API通信や料金を増やさない。
 ゲージが空、演出終了、非表示のときは描画タイマーを停止する。
 捕獲後の静止中も描画用タイマーを止め、単発タイマーでフェードの開始だけを予約する。入力再開・OFF・非表示・テーマ切替では予約も破棄する。
@@ -30,15 +34,29 @@
 
 画像生成の組み込みツールを使用（CLI未使用）。透過を維持して保存する。
 
-- [PersianCatHunt.png](../SumibiKeyboard/PersianCatHunt.png)：構え。実行時に64px以下へ縮小デコード。
+- [PersianCatAim.png](../SumibiKeyboard/PersianCatAim.png)：構え9コマ、3×3の透過シート。実行時に192pxへ縮小デコードし、64pxのセルに分割。
+- [PersianCatHunt.png](../SumibiKeyboard/PersianCatHunt.png)：以前の構え。新しいシートを読み込めなかった場合の静止フォールバック。64px以下へ縮小デコード。
 - [PersianCatRun.png](../SumibiKeyboard/PersianCatRun.png)：2×2の4コマ。128px以下へ縮小デコードし、実行時に4分割。
-- [PersianCatCatch.png](../SumibiKeyboard/PersianCatCatch.png)：カラフルな布製おもちゃをくわえてこちらを見る静止ポーズ。64px以下へ縮小デコード。
+- [PersianCatCatch.png](../SumibiKeyboard/PersianCatCatch.png)：ピンクのボールをくわえてこちらを見る静止ポーズ。64px以下へ縮小デコード。
 
 nearest描画とアンチエイリアス無効でドット感を保つ。
-構えは接続した8×8メッシュで後ろ半分を左右に動かす。
+構えは各セルの透明な余白を除き、全コマ共通の倍率・右下の基準位置で描画する。コマごとに画像を伸縮・変形しない。
+再生順は `0,1,2,3,2,1,4,5,6,7,6,5,8,4`。エネルギー0・停止時は先頭へ戻す。
 走りは各コマの切替と帯内の移動で描く。元の高解像度画像をフルサイズで展開しない。
 
 ## 確認
+
+2026-10-08の描画修正：実機で拡大後に四角形と「原文」の欠けが報告された。候補帯のクリップ解除を廃止し、猫を専用の透明オーバーレイへ分離。候補の右側余白は常時88ptではなく決めポーズ中だけ広げ、終了後は54ptへ復帰する。
+iOS 27のシミュレーターで「Undo」「収める」「原文」のネイティブガラスボタンを配置し、拡大中・自然終了後のLight/Darkと記号展開を確認。終了後に候補幅が復帰し、原文が表示されること、猫が候補帯へ戻ること、キャンセルとテーマ変更・OFFも検証した。2026-10-08に修正版の実機向けビルドが成功し、iPhone 17eへの上書きインストールとアプリ起動を確認。その後、利用者から実機で修正できたとの確認を得た（四角形と「原文」の欠けが解消）。
+
+2026-10-08の決めポーズ拡大：縦横2倍、縦／横・小型／大型幅でキーボード内に収まる位置、候補領域との非重複を計算テストで検証。
+Debugビルド成功。iOS 27のシミュレーターで製品のKeyboardViewControllerを使い、縦向きのLight/Dark・記号一覧展開時を確認した。猫がキーボード内に収まり、数字キーと重ならないこと、キャンセル後のサイズ復帰、他テーマ・OFF時の高さ／クリップの復帰も検証した。
+2026-10-08：9コマの構え・ピンクのボール・2倍の決めポーズを含む版を、接続中のiPhone 17eへ上書きインストールし、Sumibiアプリの起動が成功した。キーボードの実際の見え方・操作は利用者の確認待ち。
+
+2026-10-08の9コマ版：iOSシミュレーター向けDebugビルドが成功。猫の構え・走り、画像切り出し、エネルギー減衰、弓・魔法、設定チャットの回帰テストが成功。
+実際の縮小デコードを使い、9枚が別々の画像であることと、全コマで顔・しっぽを含む可視ピクセルが切り落とされないことを検証した。
+iOS 27の演出単体プレビューでLight/Dark・40pt/32ptの表示を確認。描画比較でコマの変化、ゲージ0で先頭に復帰、捕獲後の静止、キャンセル・停止後の復帰を確認した。
+9コマ版の実機インストール状況は上記の最新記録を参照。以下は実機確認項目と、以前の版の確認記録。
 
 チャージ・設定チャットの既存回帰テストと猫の移動計算テストが成功。
 走りの強弱、単調な移動、4コマの範囲、フェード、終了、不正値を検証。
@@ -46,7 +64,7 @@ nearest描画とアンチエイリアス無効でドット感を保つ。
 - [ ] Light/Dark・40pt/32ptの候補帯で、顔・しっぽ・ステータス文字が見える
 - [ ] 入力中にお尻が揺れ、入力休止でゲージと動きが収まる
 - [ ] 変換で右へ走り、低／高チャージの速度が変わる
-- [ ] 入力中の目標とくわえたものが、動物ではなく布製おもちゃだと分かる
+- [ ] 入力中の目標とくわえたものが、動物ではなくピンクのボールだと分かる
 - [ ] 右端でおもちゃをくわえた正面ポーズになり、2秒間静止した後フェードして戻る
 - [ ] 候補・Undo・範囲変換・追加候補を妨げない
 - [ ] テーマ切替・OFF・キャンセルで描画が残らない
@@ -58,6 +76,52 @@ iOS Debugビルド成功。iOS 27の演出単体プレビューで、Light/Dark�
 両PNGは1254×1254で透明な四隅を保持。背景の透明部分と、柔らかい光のにじみが残っていないことも検証した。
 
 ## 制作プロンプト
+
+### ピンクのボールへの変更（2026-10-08）
+
+利用者の希望により、布製の筒型おもちゃをピンクのボールへ変更。猫の顔・体・正面ポーズは維持した。
+組み込み画像生成を使用（CLI未使用）。保存先は `SumibiKeyboard/PersianCatCatch.png`。
+右端の目標も同じ色の丸いドット絵へ変更。元の写真は使わず、生成済みの猫画像だけを編集した。
+ピンクのボール版のDebugビルドと猫の構え・走り・切り出しテストが成功。
+iOS 27の演出単体プレビューでLight/Dark・40pt/32ptの目標とくわえた状態を確認。描画比較で、静止・ゲージ0への復帰・キャンセル・停止を確認した。実機インストール状況は上記の最新記録を参照。
+
+```text
+Use case: precise-object-edit
+Asset type: transparent 8-bit Persian cat sprite for an iOS keyboard bar.
+Input image 1: edit target, the existing cat holding a blue/pink cylindrical cloth toy.
+Change ONLY the toy in its mouth: replace the entire blue cylinder, pink bands, stitches and yellow string with ONE ROUND PINK TOY BALL, gently held at the same mouth position. The ball is clearly spherical/circular, bright medium pink with darker pink pixel shading and a small pale pink square highlight, simple coarse 8-bit pixel art. About the same height as the original toy but ROUND (not elongated). No strings, ribbons, animal features or other objects. Keep both eyes and pink nose completely visible.
+Preserve EXACTLY the cat's face, golden eyes, gentle expression, large head proportions, cream/tan fur, white whiskers, paws, raised fluffy tail, entire body pose, size, position, framing and pixel style. Do not redesign or rescale the cat. Same square canvas, one full-body cat looking at the viewer.
+Background genuinely transparent alpha, preserve existing transparency. Crisp square-pixel edges, no colored glow or matte fringe, no soft shadows, scenery, floor, text or watermark.
+```
+
+### お尻フリフリを専用コマへ変更（2026-10-08）
+
+既存の生成済み構え画像を参照して9ポーズを制作し、余白を調整した。組み込み画像生成を使用（CLI未使用）。元の写真は参照・追加していない。
+保存先は `SumibiKeyboard/PersianCatAim.png`。走り4コマ・おもちゃをくわえた正面ポーズ・2秒の静止は変更しない。
+初期案の16コマ版は向きと余白が揃わなかったため不採用。採用した9コマ版のプロンプト：
+
+```text
+Use case: stylized-concept
+Asset type: transparent 3-by-3 sprite sheet of NINE animation frames.
+Image 1: exact character identity and style reference.
+Draw nine distinct full-body poses of this SAME big-headed cream Persian cat playfully wiggling its raised hindquarters before pouncing to the RIGHT. ALL NINE cats face RIGHT, never mirror or turn left. Preserve the SAME recognizable big rounded flat face, gentle golden eyes, pink nose, cream/tan fur, large fluffy cheeks and raised fluffy tail. Keep head and front paws fixed; only redraw the rear half changing anatomy, hind-leg bends, pelvis twist and tail curve. This is actual sequential hand-drawn animation, not mesh distortion.
+Order reading left to right then top to bottom: 0 center; 1 slight rump-toward-viewer; 2 medium rump-toward-viewer; 3 maximum rump-toward-viewer; 4 relaxed center; 5 slight rump-away-from-viewer; 6 medium rump-away-from-viewer; 7 maximum rump-away-from-viewer; 8 relaxed center.
+EXACT regular 3 columns by 3 rows on a square canvas, nine equal SQUARE cells. One cat fully inside each cell. Identical scale, head placement, front paw baseline and viewing angle. The cat occupies about 65% of the cell width and height, with LARGE transparent margins all around every cell. No outline touches cell edges. Keep all ears, paws and tail tips visible. No drawn borders, grid lines, frame numbers or labels.
+Same coarse square-pixel 8-bit art. Hard pixel silhouettes with flat cream, tan, warm-brown outlines and gentle eyes. No gradients, fine fur painting, blur or soft halo.
+Genuinely transparent background alpha outside the cats, with EMPTY TRANSPARENT gutters. No colored matte or glow, no red or yellow fringe, no shadow, scenery, floor, toys, prey, text, watermark or other objects.
+```
+
+最終の余白調整プロンプト：
+
+```text
+Use case: precise-object-edit
+Image 1 is a nine-frame 3x3 Persian-cat anticipation animation sheet. Perform a MAJOR LAYOUT CHANGE, not an identity change.
+The cats are currently much too large in their cells and bleed across borders. SHRINK EVERY ENTIRE CAT TO 70% OF ITS CURRENT WIDTH AND HEIGHT. The cat art itself and ALL NINE DIFFERENT POSES must remain exactly the same. Do not crop off paws, face or tail.
+Place each shrunken cat back into its original 3x3 square cell. Align all front paws to the same baseline at 82% cell height; align pink noses to the same x coordinate, about 67% cell width. All cats keep the same size, SAME big heads, gentle faces, right-facing direction and original frame order.
+After shrink, each cell must have a clearly wide EMPTY TRANSPARENT gutter of at least 12% of cell width on EVERY side. In particular there must be a wide transparent vertical lane between columns 1 and 2; the middle-row left cat's nose must not cross into the middle cat cell.
+REMOVE all isolated red/yellow specks and colored outer fringes, make them alpha 0. Transparent alpha outside cats, crisp cream/tan/brown square-pixel silhouettes. Same square canvas, same 3 columns and 3 rows. No new poses, no mirrored cats, no extra objects, no grid lines, text or numbers.
+The visible output must show MUCH SMALLER cats separated by MUCH WIDER blank transparent gutters than Image 1.
+```
 
 ### 布製おもちゃへの変更
 
@@ -172,7 +236,7 @@ Square canvas, exact regular 2 by 2 grid, no drawn grid lines. Alpha must be 0 t
 
 2026-10-07：写真由来の顔立ち・優しい表情は保ち、頭と顔を大きくして体をコンパクトにする。
 構えと走り4コマを同じ比率に揃える。候補帯や猫の表示領域の大きさは変更しない。
-お尻のメッシュ変形は左側に限定し、大きな顔の目・鼻が揺れで歪まないようにする。
+当時はお尻のメッシュ変形を左側に限定した。2026-10-08に上記の専用9コマへ置き換え、メッシュ変形は廃止した。
 組み込み画像生成で既存アセットを編集した（CLI未使用）。
 走りはコマ内の透明な余白も調整し、隣のコマが混入しない配置にした。
 顔拡大版の移動計算テスト・iOS Debugビルドが成功。Light/Dark・40pt/32ptの演出単体プレビューで確認した。

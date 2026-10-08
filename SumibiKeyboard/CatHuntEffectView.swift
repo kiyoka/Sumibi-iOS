@@ -1,5 +1,25 @@
 import Foundation
 
+/// Distinct, hand-drawn poses. Integrating the playhead avoids jumps as energy decays.
+struct CatHuntMotion {
+    static let frameCount = 9
+    static let sequence = [0, 1, 2, 3, 2, 1, 4, 5, 6, 7, 6, 5, 8, 4]
+    private var playhead: Double = 0
+    var frameIndex: Int { Self.sequence[Int(playhead)] }
+
+    mutating func advance(by elapsed: Double, energy: Double) -> Int {
+        guard elapsed.isFinite, elapsed > 0 else { return frameIndex }
+        let level = energy.isFinite ? min(1, max(0, energy)) : 0
+        let rate = 12 + 12 * level
+        let count = Double(Self.sequence.count)
+        let step = elapsed.truncatingRemainder(dividingBy: count / rate) * rate
+        playhead = (playhead + step).truncatingRemainder(dividingBy: count)
+        return frameIndex
+    }
+
+    mutating func reset() { playhead = 0 }
+}
+
 /// Time-based dash geometry is independent of display cadence and contains no input text.
 struct CatRunMotion {
     enum Phase { case running, holding, fading, finished }
@@ -35,6 +55,57 @@ struct CatRunMotion {
     }
 }
 
+#if canImport(CoreGraphics)
+import CoreGraphics
+
+/// Reserve space inside the keyboard, rather than drawing into the host app above it.
+enum CatCelebrationLayout {
+    static func normalSide(barHeight: CGFloat) -> CGFloat { max(0, min(44, barHeight - 4)) }
+    static func extraTopSpace(barHeight: CGFloat) -> CGFloat { normalSide(barHeight: barHeight) }
+    static func trailingInset(barHeight: CGFloat) -> CGFloat { normalSide(barHeight: barHeight) * 2 + 16 }
+    static func frame(in bar: CGRect) -> CGRect {
+        let side = normalSide(barHeight: bar.height) * 2
+        return CGRect(x: bar.maxX - 8 - side, y: bar.maxY - 3 - side, width: side, height: side)
+    }
+}
+
+enum CatHuntSpriteSheet {
+    static func frames(from sheet: CGImage) -> [CGImage] {
+        guard sheet.width == sheet.height, sheet.width % 3 == 0 else { return [] }
+        let side = sheet.width / 3
+        let frames = (0..<CatHuntMotion.frameCount).compactMap { index -> CGImage? in
+            guard let cell = sheet.cropping(to: CGRect(x: index % 3 * side, y: index / 3 * side,
+                                                       width: side, height: side)),
+                  let bounds = visibleBounds(of: cell) else { return nil }
+            return cell.cropping(to: bounds)
+        }
+        return frames.count == CatHuntMotion.frameCount ? frames : []
+    }
+
+    private static func visibleBounds(of image: CGImage) -> CGRect? {
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            // Keep raw bitmap row order aligned with CGImage.cropping coordinates.
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard rendered else { return nil }
+        var minX = width, minY = height, maxX = -1, maxY = -1
+        for y in 0..<height { for x in 0..<width where pixels[(y * width + x) * 4 + 3] > 50 {
+            minX = min(minX, x); minY = min(minY, y)
+            maxX = max(maxX, x); maxY = max(maxY, y)
+        } }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+}
+#endif
+
 #if canImport(UIKit)
 import UIKit
 import ImageIO
@@ -49,11 +120,20 @@ final class CatHuntEffectView: UIView {
     private var runProgress: CGFloat = 0
     private var runOpacity: CGFloat = 1
     private var runStartTime: CFTimeInterval = 0
-    private var aimStartTime: CFTimeInterval = 0
+    private var aimLastTime: CFTimeInterval = 0
+    private var aimMotion = CatHuntMotion()
     private var cancelStartTime: CFTimeInterval?
     private var displayLink: CADisplayLink?
     private var holdTimer: Timer?
-    private var hasCapturedPrey = false
+    weak var celebrationHost: UIView? {
+        didSet { layoutCat() }
+    }
+    var onCelebrationChanged: ((Bool) -> Void)?
+    private var hasCapturedPrey = false {
+        didSet {
+            if oldValue != hasCapturedPrey { onCelebrationChanged?(hasCapturedPrey) }
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -85,7 +165,8 @@ final class CatHuntEffectView: UIView {
             if charge > 0, !UIAccessibility.isReduceMotionEnabled { startUpdates() }
             else {
                 stopUpdates()
-                cat.showHunting(wiggle: 0)
+                aimMotion.reset()
+                cat.showHunting(frameIndex: 0)
             }
         }
         setNeedsDisplay()
@@ -123,7 +204,8 @@ final class CatHuntEffectView: UIView {
         hasCapturedPrey = false
         cat.layer.removeAllAnimations()
         cat.alpha = 1
-        cat.showHunting(wiggle: 0)
+        aimMotion.reset()
+        cat.showHunting(frameIndex: 0)
         layoutCat()
         updateGauge(animated: false)
         setNeedsDisplay()
@@ -143,7 +225,7 @@ final class CatHuntEffectView: UIView {
 
     private func startUpdates() {
         guard displayLink == nil else { return }
-        aimStartTime = CACurrentMediaTime()
+        aimLastTime = CACurrentMediaTime()
         let link = CADisplayLink(target: self, selector: #selector(tick))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 30, preferred: 30)
         displayLink = link
@@ -164,7 +246,9 @@ final class CatHuntEffectView: UIView {
         runOpacity = 1
         hasCapturedPrey = false
         cat.alpha = 1
-        cat.showHunting(wiggle: 0)
+        aimMotion.reset()
+        aimLastTime = CACurrentMediaTime()
+        cat.showHunting(frameIndex: 0)
         layoutCat()
         if charge == 0 || UIAccessibility.isReduceMotionEnabled { stopUpdates() }
         setNeedsDisplay()
@@ -212,13 +296,27 @@ final class CatHuntEffectView: UIView {
                 }
             }
         } else {
-            let wiggle = sin((now - aimStartTime) * .pi * 2 * (1.7 + Double(charge) * 1.8))
-            cat.showHunting(wiggle: CGFloat(wiggle) * (0.035 + charge * 0.045))
+            let frame = aimMotion.advance(by: now - aimLastTime, energy: Double(charge))
+            aimLastTime = now
+            cat.showHunting(frameIndex: frame)
         }
         setNeedsDisplay()
     }
 
     private func layoutCat() {
+        if hasCapturedPrey, let celebrationHost {
+            // The large sprite is a keyboard-level decoration, not part of the clipped
+            // candidate/glass subtree. Keep every candidate's clipping unchanged.
+            if cat.superview !== celebrationHost { celebrationHost.addSubview(cat) }
+            cat.frame = convert(CatCelebrationLayout.frame(in: bounds), to: celebrationHost)
+            return
+        }
+        if cat.superview !== self { addSubview(cat) }
+        if hasCapturedPrey {
+            // A standalone preview may not supply an overlay host.
+            cat.frame = CatCelebrationLayout.frame(in: bounds)
+            return
+        }
         let distance = max(0, bounds.width - 54)
         let x = 2 + distance * runProgress
         let pixelScale = max(1, traitCollection.displayScale)
@@ -241,23 +339,21 @@ final class CatHuntEffectView: UIView {
         guard (charge > 0 || run != nil), let context = UIGraphicsGetCurrentContext() else { return }
         context.setShouldAntialias(false)
         if !hasCapturedPrey {
-            // Match the caught sprite: colorful sewn fabric, never a living animal.
-            let x = max(0, bounds.width - 23)
-            let y = floor(bounds.height * 0.62 / 2) * 2
-            context.setFillColor(UIColor.systemCyan.cgColor)
-            context.fill(CGRect(x: x, y: y, width: 14, height: 8))
-            context.setFillColor(UIColor.systemPink.cgColor)
-            context.fill(CGRect(x: x + 2, y: y, width: 2, height: 8))
-            context.fill(CGRect(x: x + 10, y: y, width: 2, height: 8))
-            context.setFillColor(UIColor.systemBlue.cgColor)
-            for offset in stride(from: 4, through: 8, by: 2) {
-                context.fill(CGRect(x: x + CGFloat(offset), y: y + 4, width: 1, height: 1))
+            // Match the caught sprite: a pink toy ball, never a living animal.
+            let x = max(0, bounds.width - 22)
+            let y = max(0, floor((bounds.height - 20) / 2) * 2)
+            context.setFillColor(UIColor(red: 0.72, green: 0.04, blue: 0.30, alpha: 1).cgColor)
+            for (row, width) in [6, 10, 14, 14, 14, 10, 6].enumerated() {
+                context.fill(CGRect(x: x + CGFloat(14 - width) / 2, y: y + CGFloat(row) * 2,
+                                    width: CGFloat(width), height: 2))
             }
-            context.setFillColor(UIColor.systemYellow.cgColor)
-            context.fill(CGRect(x: x + 14, y: y + 3, width: 4, height: 1))
-            context.fill(CGRect(x: x + 17, y: y + 3, width: 1, height: 5))
-            context.fill(CGRect(x: x + 14, y: y + 7, width: 4, height: 1))
-            context.fill(CGRect(x: x + 14, y: y + 5, width: 1, height: 2))
+            context.setFillColor(UIColor(red: 1, green: 0.31, blue: 0.60, alpha: 1).cgColor)
+            for (row, width) in [6, 10, 10, 10, 6].enumerated() {
+                context.fill(CGRect(x: x + CGFloat(14 - width) / 2, y: y + 2 + CGFloat(row) * 2,
+                                    width: CGFloat(width), height: 2))
+            }
+            context.setFillColor(UIColor(red: 1, green: 0.69, blue: 0.83, alpha: 1).cgColor)
+            context.fill(CGRect(x: x + 4, y: y + 4, width: 4, height: 2))
         }
         guard let run, runProgress > 0, !hasCapturedPrey else { return }
         context.setFillColor(UIColor.systemOrange.withAlphaComponent(runOpacity * 0.5).cgColor)
@@ -269,13 +365,14 @@ final class CatHuntEffectView: UIView {
     }
 }
 
-/// Raised-tail running poses are bitmap frames; a connected mesh wiggles only the rear.
+/// Both anticipation and running use hand-drawn bitmap frames, without mesh distortion.
 @MainActor
-private final class HuntingCatSpriteView: UIView {
+final class HuntingCatSpriteView: UIView {
     private let hunting = HuntingCatSpriteView.loadSprite("PersianCatHunt", size: 64)
     private let caught = HuntingCatSpriteView.loadSprite("PersianCatCatch", size: 64)
     private let running = HuntingCatSpriteView.loadRunFrames()
-    private var wiggle: CGFloat = 0
+    private let huntingFrames = HuntingCatSpriteView.loadHuntFrames()
+    private var huntingFrameIndex = 0
     private var frameIndex: Int?
     private var hasCaughtPrey = false
 
@@ -284,21 +381,25 @@ private final class HuntingCatSpriteView: UIView {
         isOpaque = false
         isUserInteractionEnabled = false
         backgroundColor = .clear
+        contentMode = .redraw
+        layer.magnificationFilter = .nearest
+        layer.minificationFilter = .nearest
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func showHunting(wiggle: CGFloat) {
+    func showHunting(frameIndex: Int) {
+        let index = max(0, min(CatHuntMotion.frameCount - 1, frameIndex))
+        guard hasCaughtPrey || self.frameIndex != nil || huntingFrameIndex != index else { return }
         hasCaughtPrey = false
-        frameIndex = nil
-        self.wiggle = wiggle
+        self.frameIndex = nil
+        huntingFrameIndex = index
         setNeedsDisplay()
     }
 
     func showRunning(frameIndex: Int) {
         hasCaughtPrey = false
         self.frameIndex = frameIndex
-        wiggle = 0
         setNeedsDisplay()
     }
 
@@ -306,7 +407,6 @@ private final class HuntingCatSpriteView: UIView {
         guard !hasCaughtPrey else { return }
         hasCaughtPrey = true
         frameIndex = nil
-        wiggle = 0
         setNeedsDisplay()
     }
 
@@ -331,18 +431,18 @@ private final class HuntingCatSpriteView: UIView {
         }
     }
 
+    private static func loadHuntFrames() -> [UIImage] {
+        // Decode the whole 3x3 sheet at only 192px, then keep nine <=64px poses.
+        guard let sheet = loadSprite("PersianCatAim", size: 192)?.cgImage else { return [] }
+        return CatHuntSpriteSheet.frames(from: sheet).map {
+            UIImage(cgImage: $0, scale: 3, orientation: .up)
+        }
+    }
+
     private var imageRect: CGRect {
         let side = min(bounds.width, bounds.height)
         return CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
                       width: side, height: side)
-    }
-
-    private func posedPoint(_ point: CGPoint) -> CGPoint {
-        // The enlarged face occupies the right half; keep its features out of the rump mesh.
-        let rear = max(0, min(1, (0.42 - point.x) / 0.22))
-            * max(0, min(1, (0.96 - point.y) / 0.18))
-        return CGPoint(x: imageRect.minX + (point.x + rear * wiggle) * imageRect.width,
-                       y: imageRect.minY + (point.y - rear * abs(wiggle) * 0.18) * imageRect.height)
     }
 
     override func draw(_ rect: CGRect) {
@@ -357,39 +457,14 @@ private final class HuntingCatSpriteView: UIView {
             running[frameIndex % running.count].draw(in: imageRect)
             return
         }
-        guard let hunting else { return }
-        guard wiggle != 0 else { hunting.draw(in: imageRect); return }
-        for row in 0..<8 {
-            for column in 0..<8 {
-                let x = CGFloat(column) / 8, y = CGFloat(row) / 8, step: CGFloat = 1 / 8
-                let a = CGPoint(x: x, y: y), b = CGPoint(x: x + step, y: y)
-                let c = CGPoint(x: x, y: y + step), d = CGPoint(x: x + step, y: y + step)
-                drawTriangle(a, b, c, image: hunting, context: context)
-                drawTriangle(d, c, b, image: hunting, context: context)
-            }
-        }
-    }
-
-    private func drawTriangle(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint,
-                              image: UIImage, context: CGContext) {
-        let p = posedPoint(a), q = posedPoint(b), r = posedPoint(c)
-        let determinant = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
-        let xx = ((q.x - p.x) * (c.y - a.y) - (r.x - p.x) * (b.y - a.y)) / determinant
-        let xy = ((r.x - p.x) * (b.x - a.x) - (q.x - p.x) * (c.x - a.x)) / determinant
-        let yx = ((q.y - p.y) * (c.y - a.y) - (r.y - p.y) * (b.y - a.y)) / determinant
-        let yy = ((r.y - p.y) * (b.x - a.x) - (q.y - p.y) * (c.x - a.x)) / determinant
-        context.saveGState()
-        context.beginPath()
-        context.move(to: p)
-        context.addLine(to: q)
-        context.addLine(to: r)
-        context.closePath()
-        context.clip()
-        context.concatenate(CGAffineTransform(a: xx, b: yx, c: xy, d: yy,
-                                              tx: p.x - xx * a.x - xy * a.y,
-                                              ty: p.y - yx * a.x - yy * a.y))
-        image.draw(in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        context.restoreGState()
+        guard !huntingFrames.isEmpty else { hunting?.draw(in: imageRect); return }
+        let frame = huntingFrames[huntingFrameIndex]
+        // Rigid bottom/right anchoring: no per-frame stretching or warping of the face.
+        let side = huntingFrames.map { max($0.size.width, $0.size.height) }.max() ?? 1
+        let scale = imageRect.width / side
+        let width = frame.size.width * scale, height = frame.size.height * scale
+        frame.draw(in: CGRect(x: imageRect.maxX - width, y: imageRect.maxY - height,
+                              width: width, height: height))
     }
 }
 #endif

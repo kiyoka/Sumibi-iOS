@@ -26,15 +26,25 @@ swiftc -module-cache-path /private/tmp/sumibi-game-test-cache \
 /private/tmp/sumibi-game-energy-tests
 ```
 
-## 猫のダッシュ
+## 猫の構え・ダッシュ
 
-蓄積量に応じた速度、走り出し、移動の単調性、4コマの切替、おもちゃをくわえた後の2秒間の静止・正面ポーズ、フェード、終了、不正値を確認します。
+描き分けた構え9コマの往復、打鍵の勢いによる速度、速度変更時の位相維持、リセット、不正値を確認します。走り出し、移動の単調性、走り4コマ、おもちゃをくわえた後の2秒間の静止・正面ポーズ、フェードも確認します。
+決めポーズの縦横2倍と、縦／横・複数の画面幅でキーボード内に収まり候補領域と重ならない配置も確認します。
 
 ```sh
 swiftc -module-cache-path /private/tmp/sumibi-cat-test-cache \
   SumibiKeyboard/CatHuntEffectView.swift Tests/CatRunMotionTests.swift \
   -o /private/tmp/sumibi-cat-motion-tests
 /private/tmp/sumibi-cat-motion-tests
+```
+
+画像の3×3配置・9コマの差・透明な境界・実行時と同じ192pxデコードを確認します。製品コードと同じ切り出し処理で、顔・しっぽの可視ピクセルが欠けないことも確認します（macOSのImageIOを使用）。
+
+```sh
+swiftc -module-cache-path /private/tmp/sumibi-cat-test-cache \
+  SumibiKeyboard/CatHuntEffectView.swift Tests/CatAimSpriteTests.swift \
+  -o /private/tmp/sumibi-cat-sprite-tests
+/private/tmp/sumibi-cat-sprite-tests
 ```
 
 ## 弓使い・魔法使い

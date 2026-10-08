@@ -37,6 +37,7 @@
 		A1000000000000000000001C /* FantasyGameEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* FantasyGameEffectView.swift */; };
 		A1000000000000000000001D /* RPGArcher.png in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* RPGArcher.png */; };
 		A1000000000000000000001E /* RPGWizard.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* RPGWizard.png */; };
+		A1000000000000000000001F /* PersianCatAim.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* PersianCatAim.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +111,7 @@
 		A2000000000000000000001E /* FantasyGameEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyGameEffectView.swift; sourceTree = "<group>"; };
 		A2000000000000000000001F /* RPGArcher.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = RPGArcher.png; sourceTree = "<group>"; };
 		A20000000000000000000020 /* RPGWizard.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = RPGWizard.png; sourceTree = "<group>"; };
+		A20000000000000000000021 /* PersianCatAim.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = PersianCatAim.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +178,7 @@
 				A2000000000000000000001E /* FantasyGameEffectView.swift */,
 				A2000000000000000000001F /* RPGArcher.png */,
 				A20000000000000000000020 /* RPGWizard.png */,
+				A20000000000000000000021 /* PersianCatAim.png */,
 				A20000000000000000000002 /* KeyboardViewController.swift */,
 				A20000000000000000000004 /* Info.plist */,
 				A2000000000000000000000A /* SumibiKeyboard.entitlements */,
@@ -330,6 +333,7 @@
 				A1000000000000000000001B /* PersianCatCatch.png in Resources */,
 				A1000000000000000000001D /* RPGArcher.png in Resources */,
 				A1000000000000000000001E /* RPGWizard.png in Resources */,
+				A1000000000000000000001F /* PersianCatAim.png in Resources */,
 				A1000000000000000000000D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

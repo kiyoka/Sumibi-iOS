@@ -211,6 +211,8 @@ final class KeyboardViewController: UIInputViewController {
     private weak var candidateStripView: HorizontalCandidateStripView?
     private var candidateBarShimmerView: UIView?
     private let gameEffect = KeyboardGameEffectView()
+    private let gameCelebrationOverlay = UIView()
+    private var isCatCelebrating = false
     private weak var gameCharacterButton: UIButton?
     private weak var candidateIconView: UIImageView?
     private var candidateIconWidthConstraint: NSLayoutConstraint?
@@ -369,6 +371,20 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(candidateBar)
         view.addSubview(symbolPanel)
         view.addSubview(keyRows)
+        gameCelebrationOverlay.isOpaque = false
+        gameCelebrationOverlay.isHidden = true
+        gameCelebrationOverlay.isUserInteractionEnabled = false
+        gameCelebrationOverlay.accessibilityElementsHidden = true
+        gameCelebrationOverlay.backgroundColor = .clear
+        gameCelebrationOverlay.clipsToBounds = true
+        gameCelebrationOverlay.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(gameCelebrationOverlay)
+        gameEffect.configureCatCelebration(in: gameCelebrationOverlay) { [weak self] active in
+            guard let self else { return }
+            self.isCatCelebrating = active
+            self.updateKeyboardHeight()
+            self.view.setNeedsLayout()
+        }
         let candidateBarHeightConstraint = candidateBar.heightAnchor.constraint(equalToConstant: 40)
         let candidateBarBottomSpacingConstraint = candidateBar.bottomAnchor.constraint(
             equalTo: symbolPanel.topAnchor
@@ -395,6 +411,10 @@ final class KeyboardViewController: UIInputViewController {
         self.symbolPanelHeightConstraint = symbolPanelHeightConstraint
         self.symbolPanelBottomSpacingConstraint = symbolPanelBottomSpacingConstraint
         NSLayoutConstraint.activate([
+            gameCelebrationOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            gameCelebrationOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            gameCelebrationOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            gameCelebrationOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             candidateBarHeightConstraint,
             candidateBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
             candidateBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
@@ -435,12 +455,19 @@ final class KeyboardViewController: UIInputViewController {
             : LayoutMetrics.portraitSectionSpacing
         let expandedPanelHeight: CGFloat = isLandscape ? 84 : 112
         let expandedExtraHeight = expandedPanelHeight + sectionSpacing
+        let barHeight: CGFloat = isLandscape ? 32 : 40
+        let hasLargeCatPose = isGameModeEnabled && gameTheme == .persianCat
         keyboardHeightConstraint?.constant = normalHeight
             + ((isSymbolPanelExpanded || isCollapsingSymbolPanel) ? expandedExtraHeight : 0)
+            + (hasLargeCatPose ? CatCelebrationLayout.extraTopSpace(barHeight: barHeight) : 0)
         symbolPanelHeightConstraint?.constant = isSymbolPanelExpanded
             ? expandedPanelHeight
             : 0
-        candidateBarHeightConstraint?.constant = isLandscape ? 32 : 40
+        candidateBarHeightConstraint?.constant = barHeight
+        let trailingInset: CGFloat = hasLargeCatPose
+            ? (isCatCelebrating ? CatCelebrationLayout.trailingInset(barHeight: barHeight) : 54) : 8
+        candidateStripTrailingConstraint?.constant = -trailingInset
+        candidateMessageTrailingConstraint?.constant = -trailingInset
         candidateBarBottomSpacingConstraint?.constant = isSymbolPanelExpanded
             ? -sectionSpacing
             : 0
@@ -1494,6 +1521,7 @@ final class KeyboardViewController: UIInputViewController {
         case .rpgWizard: gameEffect.setTheme(.wizard)
         }
         gameEffect.isHidden = !enabled
+        gameCelebrationOverlay.isHidden = !enabled || theme != .persianCat
         candidateIconView?.isHidden = enabled
         gameCharacterButton?.isHidden = !enabled
         gameCharacterButton?.isEnabled = enabled
@@ -1501,10 +1529,8 @@ final class KeyboardViewController: UIInputViewController {
         gameCharacterButton?.accessibilityHint = "タップすると\(theme.next.displayName)に切り替えます"
         // Keep the wizard's white circle clear of status text and candidate buttons.
         candidateIconWidthConstraint?.constant = enabled ? (theme == .rpgWizard ? 72 : 44) : 28
-        // Leave the right-edge prey/captured cat visible without covering candidate buttons.
-        let trailingInset: CGFloat = enabled && theme == .persianCat ? 54 : 8
-        candidateStripTrailingConstraint?.constant = -trailingInset
-        candidateMessageTrailingConstraint?.constant = -trailingInset
+        // The large cat lives in a separate overlay; never unclip the glass candidates.
+        updateKeyboardHeight()
         for case let label as CandidateStatusLabel in candidateMessageStack.arrangedSubviews {
             label.hasGameBackground = enabled
         }
