@@ -84,6 +84,31 @@ public struct ConversionPromptConfiguration: Codable, Equatable, Sendable {
     }
 }
 
+/// More themes can be added without coupling theme selection to the ON/OFF switch.
+public enum KeyboardGameTheme: String, CaseIterable, Identifiable, Sendable {
+    case rpgDragon
+    case spaceLaser
+    case persianCat
+    case rpgArcher
+    case rpgWizard
+
+    public var id: Self { self }
+    public var next: Self {
+        let themes = Self.allCases
+        guard let index = themes.firstIndex(of: self) else { return .rpgDragon }
+        return themes[(index + 1) % themes.count]
+    }
+    public var displayName: String {
+        switch self {
+        case .rpgDragon: "RPG風ドラゴン"
+        case .spaceLaser: "宇宙船のレーザー砲"
+        case .persianCat: "獲物を狙うペルシャ猫"
+        case .rpgArcher: "弓使いのチャージショット"
+        case .rpgWizard: "魔法使いの白い魔法陣"
+        }
+    }
+}
+
 public struct SharedSettingsStore {
     public static let appGroupIdentifier = "group.org.sumibi.Sumibi-iOS"
 
@@ -92,6 +117,8 @@ public struct SharedSettingsStore {
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let conversionCompletionHapticEnabled = "conversionCompletionHapticEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
+        static let keyboardGameModeEnabled = "keyboardGameModeEnabled"
+        static let keyboardGameTheme = "keyboardGameTheme"
         static let userDictionary = "userDictionary"
         static let customSystemPrompt = "customSystemPrompt"
         static let conversionPromptConfiguration = "conversionPromptConfiguration"
@@ -213,6 +240,23 @@ public struct SharedSettingsStore {
 
     public func loadUserDictionary() -> String {
         defaults.string(forKey: Key.userDictionary) ?? ""
+    }
+
+    public func loadKeyboardGameModeEnabled() -> Bool {
+        defaults.bool(forKey: Key.keyboardGameModeEnabled)
+    }
+
+    public func saveKeyboardGameModeEnabled(_ isEnabled: Bool) {
+        defaults.set(isEnabled, forKey: Key.keyboardGameModeEnabled)
+    }
+
+    public func loadKeyboardGameTheme() -> KeyboardGameTheme {
+        defaults.string(forKey: Key.keyboardGameTheme)
+            .flatMap(KeyboardGameTheme.init(rawValue:)) ?? .rpgDragon
+    }
+
+    public func saveKeyboardGameTheme(_ theme: KeyboardGameTheme) {
+        defaults.set(theme.rawValue, forKey: Key.keyboardGameTheme)
     }
 
     public func saveUserDictionary(_ dictionary: String) {

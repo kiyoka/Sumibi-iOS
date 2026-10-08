@@ -37,12 +37,63 @@ private struct SettingsChatTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = SharedSettingsStore(defaults: defaults)
+        testGameSettings(store, defaults)
         try testProposals(store)
         try testLegacyUsage(store, defaults)
         try testUsageContext(store)
         try await testTransport(store)
         try await testConsultationTransport(store)
         print("Chat checks passed: settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
+    }
+
+    static func testGameSettings(_ store: SharedSettingsStore, _ defaults: UserDefaults) {
+        expect(!store.loadKeyboardGameModeEnabled(), "Game mode must default to OFF")
+        expect(store.loadKeyboardGameTheme() == .rpgDragon, "Default prototype must be the dragon")
+        store.saveKeyboardGameTheme(.rpgDragon)
+        expect(!store.loadKeyboardGameModeEnabled(), "Choosing a theme must not enable game mode")
+        store.saveKeyboardGameModeEnabled(true)
+        let reloaded = SharedSettingsStore(defaults: defaults)
+        expect(reloaded.loadKeyboardGameModeEnabled(), "Game setting must persist")
+        expect(reloaded.loadKeyboardGameTheme() == .rpgDragon, "Theme must persist")
+        store.saveKeyboardGameTheme(.spaceLaser)
+        expect(reloaded.loadKeyboardGameTheme() == .spaceLaser, "Spaceship theme must persist")
+        expect(reloaded.loadKeyboardGameModeEnabled(), "Changing theme must preserve ON")
+        store.saveKeyboardGameModeEnabled(false)
+        expect(reloaded.loadKeyboardGameTheme() == .spaceLaser, "OFF must preserve the selected spaceship")
+        store.saveKeyboardGameTheme(.rpgDragon)
+        expect(!reloaded.loadKeyboardGameModeEnabled(), "Switching back must preserve OFF")
+        store.saveKeyboardGameTheme(.persianCat)
+        expect(reloaded.loadKeyboardGameTheme() == .persianCat, "Cat theme must persist")
+        expect(!reloaded.loadKeyboardGameModeEnabled(), "Selecting cat must preserve OFF")
+        for theme in [KeyboardGameTheme.rpgArcher, .rpgWizard] {
+            store.saveKeyboardGameTheme(theme)
+            expect(reloaded.loadKeyboardGameTheme() == theme, "New fantasy themes must persist")
+            expect(!reloaded.loadKeyboardGameModeEnabled(), "New themes must preserve OFF")
+            store.saveKeyboardGameModeEnabled(true)
+            expect(reloaded.loadKeyboardGameTheme() == theme, "Enabling must preserve fantasy theme")
+            store.saveKeyboardGameModeEnabled(false)
+        }
+        expect(KeyboardGameTheme.allCases.count == 5, "All implemented themes must be selectable")
+        let cycle: [KeyboardGameTheme] = [.rpgDragon, .spaceLaser, .persianCat, .rpgArcher, .rpgWizard]
+        expect(KeyboardGameTheme.allCases == cycle, "Picker and tap cycle must share the specified order")
+        for enabled in [false, true] {
+            store.saveKeyboardGameModeEnabled(enabled)
+            store.saveKeyboardGameTheme(.rpgDragon)
+            for index in 1...10 {
+                store.saveKeyboardGameTheme(reloaded.loadKeyboardGameTheme().next)
+                expect(reloaded.loadKeyboardGameTheme() == cycle[index % cycle.count], "Cycle must persist and wrap over two rounds")
+                expect(reloaded.loadKeyboardGameModeEnabled() == enabled, "Cycling must not change ON/OFF")
+            }
+        }
+        expect(KeyboardGameTheme.rpgArcher.displayName == "弓使いのチャージショット", "Picker must identify archer")
+        expect(KeyboardGameTheme.rpgWizard.displayName == "魔法使いの白い魔法陣", "Picker must identify wizard")
+        expect(KeyboardGameTheme.persianCat.displayName == "獲物を狙うペルシャ猫", "Picker must identify cat")
+        expect(KeyboardGameTheme.spaceLaser.displayName == "宇宙船のレーザー砲", "Picker must identify spaceship")
+        defaults.set("future-theme", forKey: "keyboardGameTheme")
+        expect(reloaded.loadKeyboardGameTheme() == .rpgDragon, "Unknown themes must fall back safely")
+        store.saveKeyboardGameModeEnabled(false)
+        expect(!reloaded.loadKeyboardGameModeEnabled(), "OFF must persist without resetting the theme")
+        store.saveKeyboardGameTheme(.rpgDragon)
     }
 
     static func testProposals(_ store: SharedSettingsStore) throws {
@@ -80,6 +131,8 @@ private struct SettingsChatTests {
             #"{"reply":"変更します","changes":[{"setting":"keyClickSoundEnabled","value":false}]}"#,
             #"{"reply":"変更します","changes":[{"setting":"activePresetID","value":"none"}]}"#,
             #"{"reply":"変更します","changes":[{"setting":"model","value":"gpt-6-sol"},{"setting":"activePresetID","value":"none"}]}"#,
+            #"{"reply":"変更しました","changes":[{"setting":"keyboardGameModeEnabled","value":"true"}]}"#,
+            #"{"reply":"変更しました","changes":[{"setting":"keyboardGameTheme","value":"persianCat"}]}"#,
         ]
         for json in invalidJSON {
             expectFailure { _ = try SettingsChatPayload.decode(json) }
@@ -304,6 +357,8 @@ private struct SettingsChatTests {
         ), session: session)
         let snapshot = store.loadSettingsChatSnapshot()
         let now = ISO8601DateFormatter().date(from: "2026-10-05T03:00:00Z")!
+        let gameEnabled = store.loadKeyboardGameModeEnabled()
+        let gameTheme = store.loadKeyboardGameTheme()
         let fixedUsage = SettingsChatUsageContext(statistics: [
             ModelUsageStatistics(model: "gpt-6-sol", inputTokens: 500_000,
                                  collectionStartedAt: now.addingTimeInterval(-10 * 86_400)),
@@ -315,6 +370,13 @@ private struct SettingsChatTests {
             ("では30日なら？", "追加約3 USDです。"),
             ("2倍使ったら今後1週間は？", "追加約1.4 USDです。"),
             ("範囲だけ変換するには？", "文字列を選択して「範囲を変換」を押してください。"),
+            ("遊び心のあるキーボードについて教えて", "打鍵でエネルギーをため、変換で放出する任意のゲーム風演出です。設定からONにできます。"),
+            ("どんなキャラクターを選べる？", "ドラゴン、宇宙船、ペルシャ猫、弓使い、魔法使いを選べます。"),
+            ("猫にして", "前の設定画面の「遊び心のあるキーボード」でテーマから「獲物を狙うペルシャ猫」を選んでください。未使用ならゲーム演出もONにしてください。"),
+            ("キャラクターをタップするとどうなる？", "候補バー左端のキャラクターをタップすると次のテーマへ切り替わり、一周すると最初に戻ります。"),
+            ("遊ぶと料金や変換精度は変わる？", "演出自体では追加API通信は発生せず、変換結果や料金は変わりません。ただし通常の変換・相談にはAPI利用料金が発生します。"),
+            ("動かないのはなぜ？", "ゲーム演出のON/OFFと、iOSの「視差効果を減らす」を確認してください。ここでは現在の設定は確認できません。"),
+            ("ゲーム演出をOFFにして", "前の設定画面へ戻り「遊び心のあるキーボード」の「ゲーム演出」をOFFにしてください。"),
         ] {
             history.append(SettingsChatMessage(role: .user, content: question))
             let expectedHistoryCount = history.count
@@ -332,8 +394,20 @@ private struct SettingsChatTests {
                 for required in ["<operation_guide>", "<examples>", "<usage_context>",
                                  "未来の見積もりはあなた自身が統計から計算", "固定30日の回答にしない",
                                  "今回渡されたusage_contextの最新統計", "changesを空", "1日未満",
-                                 "実際の請求", "範囲を変換", "tari-zu = タリーズ"] {
+                                 "実際の請求", "範囲を変換", "tari-zu = タリーズ",
+                                 "ゲーム演出のON/OFF・テーマ変更もチャットからの変更対象外",
+                                 "初期設定はOFF", "速く打つほど強くたまる", "徐々に減る",
+                                 "ピンクのボール", "約2秒", "白い魔法陣", "視差効果を減らす",
+                                 "追加のAPI通信も発生しない", "現在の状態を推測しない",
+                                 "通常の文字キーでは切り替わらない"] {
                     expect(instructions.contains(required), "Consultation instructions missing: \(required)")
+                }
+                let themeNames = KeyboardGameTheme.allCases.map(\.displayName)
+                let themeLines = instructions.components(separatedBy: "\n").filter { $0.hasPrefix("・") }
+                expect(themeLines.count == themeNames.count, "Theme catalog duplicated or incomplete")
+                for (line, name) in zip(themeLines, themeNames) {
+                    expect(line.hasPrefix("・\(name)：") && line.count > name.count + 2,
+                           "Theme names, descriptions or cycle order differ from picker")
                 }
                 let usageJSON = instructions.components(separatedBy: "<usage_context>\n").last!
                     .components(separatedBy: "\n</usage_context>").first!
@@ -350,6 +424,8 @@ private struct SettingsChatTests {
             let payload = try SettingsChatPayload.decode(completion.content)
             expect(payload.changes.isEmpty, "Informational mock answer contained settings changes")
             expect(store.loadSettingsChatSnapshot() == snapshot, "Consultation changed settings")
+            expect(store.loadKeyboardGameModeEnabled() == gameEnabled
+                   && store.loadKeyboardGameTheme() == gameTheme, "Consultation changed game settings")
             history.append(SettingsChatMessage(role: .assistant, content: completion.content))
         }
     }

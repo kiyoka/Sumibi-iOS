@@ -38,6 +38,8 @@ private struct ContentView: View {
     @State private var hapticFeedbackEnabled = true
     @State private var conversionCompletionHapticEnabled = true
     @State private var keyClickSoundEnabled = true
+    @State private var keyboardGameModeEnabled = false
+    @State private var keyboardGameTheme = KeyboardGameTheme.rpgDragon
     @State private var userDictionary = ""
     @State private var conversionPromptConfiguration = ConversionPromptConfiguration()
     @State private var hasAIDataSharingConsent = false
@@ -53,6 +55,7 @@ private struct ContentView: View {
                 providerSection
                 settingsChatSection
                 keyboardBehaviorSection
+                keyboardGameSection
                 customSystemPromptSection
                 userDictionarySection
                 conversionTestSection
@@ -79,6 +82,10 @@ private struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     loadUsageStatistics()
+                    if let store = SharedSettingsStore() {
+                        keyboardGameModeEnabled = store.loadKeyboardGameModeEnabled()
+                        keyboardGameTheme = store.loadKeyboardGameTheme()
+                    }
                 }
             }
             .onChange(of: endpoint) { _, newEndpoint in
@@ -390,6 +397,28 @@ private struct ContentView: View {
         }
     }
 
+    private var keyboardGameSection: some View {
+        Section {
+            Toggle("ゲーム演出", isOn: $keyboardGameModeEnabled)
+                .onChange(of: keyboardGameModeEnabled) { _, enabled in
+                    SharedSettingsStore()?.saveKeyboardGameModeEnabled(enabled)
+                }
+            Picker("テーマ", selection: $keyboardGameTheme) {
+                ForEach(KeyboardGameTheme.allCases) { theme in
+                    Text(theme.displayName).tag(theme)
+                }
+            }
+            .pickerStyle(.menu)
+            .onChange(of: keyboardGameTheme) { _, theme in
+                SharedSettingsStore()?.saveKeyboardGameTheme(theme)
+            }
+        } header: {
+            Text("遊び心のあるキーボード")
+        } footer: {
+            Text("初期設定はOFFです。入力で力をため、変換すると候補バーでドラゴンの炎、宇宙船のレーザー、猫のダッシュ、弓使いの矢、魔法使いの白い魔法陣などを楽しめます。速く打つほど強くたまり、入力を休むと減っていきます。変換結果やAPIの利用料金には影響しません。「視差効果を減らす」がONの場合は演出の動きを控えます。")
+        }
+    }
+
     private var keyboardSetupSection: some View {
         Section {
             setupStep(number: 1, text: "「設定を開く」を押します。")
@@ -496,6 +525,8 @@ private struct ContentView: View {
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
             conversionCompletionHapticEnabled = store.loadConversionCompletionHapticEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
+            keyboardGameModeEnabled = store.loadKeyboardGameModeEnabled()
+            keyboardGameTheme = store.loadKeyboardGameTheme()
             userDictionary = store.loadUserDictionary()
             conversionPromptConfiguration = store.loadConversionPromptConfiguration()
             hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)
