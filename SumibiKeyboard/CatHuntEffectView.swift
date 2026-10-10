@@ -58,14 +58,13 @@ struct CatRunMotion {
 #if canImport(CoreGraphics)
 import CoreGraphics
 
-/// Reserve space inside the keyboard, rather than drawing into the host app above it.
+/// Grow down over the keys, never into the host app or an extra keyboard margin.
 enum CatCelebrationLayout {
     static func normalSide(barHeight: CGFloat) -> CGFloat { max(0, min(44, barHeight - 4)) }
-    static func extraTopSpace(barHeight: CGFloat) -> CGFloat { normalSide(barHeight: barHeight) }
     static func trailingInset(barHeight: CGFloat) -> CGFloat { normalSide(barHeight: barHeight) * 2 + 16 }
     static func frame(in bar: CGRect) -> CGRect {
         let side = normalSide(barHeight: bar.height) * 2
-        return CGRect(x: bar.maxX - 8 - side, y: bar.maxY - 3 - side, width: side, height: side)
+        return CGRect(x: bar.maxX - 8 - side, y: bar.minY + 1, width: side, height: side)
     }
 }
 
@@ -156,6 +155,12 @@ final class CatHuntEffectView: UIView {
         super.layoutSubviews()
         layoutCat()
         updateGauge(animated: false)
+    }
+
+    func updateCelebrationLayout() {
+        // The candidate bar can move without changing this view's bounds.
+        // Keep the keyboard-level sprite aligned after symbol-panel or orientation changes.
+        if hasCapturedPrey { layoutCat() }
     }
 
     func setCharge(_ level: Double, animated: Bool = true) {

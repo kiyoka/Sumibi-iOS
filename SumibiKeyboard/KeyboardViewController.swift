@@ -335,6 +335,7 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLayoutSubviews()
         updateKeyboardHeight()
         layoutCandidateBarShimmer()
+        gameEffect.updateCelebrationLayout()
     }
 
     private func configureKeyboard() {
@@ -459,7 +460,6 @@ final class KeyboardViewController: UIInputViewController {
         let hasLargeCatPose = isGameModeEnabled && gameTheme == .persianCat
         keyboardHeightConstraint?.constant = normalHeight
             + ((isSymbolPanelExpanded || isCollapsingSymbolPanel) ? expandedExtraHeight : 0)
-            + (hasLargeCatPose ? CatCelebrationLayout.extraTopSpace(barHeight: barHeight) : 0)
         symbolPanelHeightConstraint?.constant = isSymbolPanelExpanded
             ? expandedPanelHeight
             : 0
