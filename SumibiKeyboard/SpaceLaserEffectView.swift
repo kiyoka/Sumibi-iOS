@@ -33,6 +33,10 @@ final class KeyboardGameEffectView: UIView {
         cat.onCelebrationChanged = onChange
     }
 
+    func updateCelebrationLayout() {
+        cat.updateCelebrationLayout()
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         dragon.frame = bounds

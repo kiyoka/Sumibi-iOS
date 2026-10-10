@@ -6,13 +6,15 @@ private struct CatRunMotionTests {
         #if canImport(CoreGraphics)
         for height: CGFloat in [32, 40] {
             for width: CGFloat in [280, 358, 812] {
-                let bar = CGRect(x: 6, y: 8 + CatCelebrationLayout.extraTopSpace(barHeight: height),
-                                 width: width, height: height)
+                let bar = CGRect(x: 6, y: 8, width: width, height: height)
+                let keyboard = CGRect(x: 0, y: 0, width: width + 12, height: height == 32 ? 216 : 352)
                 let pose = CatCelebrationLayout.frame(in: bar)
                 precondition(pose.width == CatCelebrationLayout.normalSide(barHeight: height) * 2)
                 precondition(pose.height == pose.width, "Uniform 2x enlargement")
-                precondition(pose.minY >= 4 && pose.minX >= bar.minX)
-                precondition(pose.maxY <= bar.maxY && pose.maxX <= bar.maxX - 8)
+                precondition(pose.minY == bar.minY + 1 && pose.minX >= bar.minX)
+                precondition(pose.maxY > bar.maxY, "The pose must grow down over keys, not above the bar")
+                precondition(keyboard.contains(pose), "No extra keyboard height is needed")
+                precondition(pose.maxX <= bar.maxX - 8)
                 precondition(pose.minX >= bar.maxX - CatCelebrationLayout.trailingInset(barHeight: height),
                              "The celebration must not overlap the candidate strip")
             }
