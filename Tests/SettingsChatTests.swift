@@ -381,6 +381,7 @@ private struct SettingsChatTests {
             ("遊び心のあるキーボードについて教えて", "打鍵でエネルギーをため、変換で放出する任意のゲーム風演出です。設定からONにできます。"),
             ("どんなキャラクターを選べる？", "ドラゴン、宇宙船、ペルシャ猫、魔法使いの4種類を選べます。"),
             ("猫にして", "前の設定画面の「遊び心のあるキーボード」でテーマから「獲物を狙うペルシャ猫」を選んでください。未使用ならゲーム演出もONにしてください。"),
+            ("猫の決めポーズでキーボードは高くなる？", "高さは変わりません。候補帯右端から下方向へキーの上に重ねて表示し、重なったキーも操作できます。"),
             ("キャラクターをタップするとどうなる？", "候補バー左端のキャラクターをタップすると次のテーマへ切り替わり、一周すると最初に戻ります。"),
             ("遊ぶと料金や変換精度は変わる？", "演出自体では追加API通信は発生せず、変換結果や料金は変わりません。ただし通常の変換・相談にはAPI利用料金が発生します。"),
             ("動かないのはなぜ？", "ゲーム演出のON/OFFと、iOSの「視差効果を減らす」を確認してください。ここでは現在の設定は確認できません。"),
@@ -407,12 +408,17 @@ private struct SettingsChatTests {
                                  "初期設定はOFF", "速く打つほど強くたまる", "徐々に減る",
                                  "ピンクのボール", "約2秒", "白い魔法陣", "視差効果を減らす",
                                  "追加のAPI通信も発生しない", "現在の状態を推測しない",
-                                 "通常の文字キーでは切り替わらない"] {
+                                 "通常の文字キーでは切り替わらない",
+                                 "候補帯右端から下方向にキーの上へ重ねて表示",
+                                 "キーボード上部に余白を追加せず、高さも変えない",
+                                 "猫に重なったキーも操作できる"] {
                     expect(instructions.contains(required), "Consultation instructions missing: \(required)")
                 }
                 let themeNames = KeyboardGameTheme.allCases.map(\.displayName)
                 expect(!instructions.contains("弓使い") && !instructions.contains("5テーマ"),
                        "Consultation still advertises the removed theme")
+                expect(!instructions.contains("キーボード上部の余白が増える"),
+                       "Consultation still describes the removed cat top margin")
                 let themeLines = instructions.components(separatedBy: "\n").filter { $0.hasPrefix("・") }
                 expect(themeLines.count == themeNames.count, "Theme catalog duplicated or incomplete")
                 for (line, name) in zip(themeLines, themeNames) {
