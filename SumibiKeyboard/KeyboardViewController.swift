@@ -288,7 +288,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if hasFullAccess {
+        if hasFullAccess, sharedSettings?.loadKeyClickSoundEnabled() ?? true {
             keyClickSoundPlayer.prepare()
         }
         refreshGamePreferences()
@@ -297,6 +297,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopKeyRepeat()
+        keyClickSoundPlayer.suspend()
         stopGameEnergyUpdates()
         gameEnergy.reset()
         gameDocumentIdentifier = nil

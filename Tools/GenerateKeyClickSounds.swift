@@ -35,24 +35,29 @@ private struct GenerateKeyClickSounds {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for sound in KeyClickSound.allCases {
             let (frequency, duration): (Double, Double) = switch sound {
-            case .character: (2400, 0.022)
-            case .deletion: (1350, 0.028)
-            case .operation: (1850, 0.025)
+            case .character: (450, 0.022)
+            case .deletion: (260, 0.028)
+            case .operation: (350, 0.025)
             }
             let count = Int(Double(sampleRate) * duration)
             var randomState: UInt32 = 0x53554D49
+            var filteredNoise = 0.0
+            let noiseFilter = 1 - exp(-2 * Double.pi * 1200 / Double(sampleRate))
             var samples = [Int16]()
             for index in 0..<count {
                 let time = Double(index) / Double(sampleRate)
                 // A short attack/tail prevents hard discontinuities and loud pops.
-                let attack = min(1, time / 0.0008)
+                let attack = min(1, time / 0.0012)
                 let tail = min(1, Double(count - 1 - index) / (Double(sampleRate) * 0.003))
-                let envelope = attack * tail * exp(-time / 0.0045)
+                let envelope = attack * tail * exp(-time / 0.0032)
                 randomState = 1664525 &* randomState &+ 1013904223
                 let noise = Double(randomState) / Double(UInt32.max) * 2 - 1
-                let wave = 0.78 * sin(2 * .pi * frequency * time)
-                    + 0.15 * sin(2 * .pi * frequency * 1.7 * time) + 0.07 * noise
-                samples.append(Int16((wave * envelope * 0.24 * Double(Int16.max)).rounded()))
+                // Remove the bright overtone; filter noise and damp quickly so
+                // repeated taps feel like soft knocks rather than ringing beeps.
+                filteredNoise += noiseFilter * (noise - filteredNoise)
+                let wave = 0.82 * sin(2 * .pi * frequency * time) + 0.18 * filteredNoise
+                // +6 dB relative to the first muted version, with ample headroom.
+                samples.append(Int16((wave * envelope * 0.40 * Double(Int16.max)).rounded()))
             }
             var data = Data()
             func text(_ value: String) { data.append(contentsOf: value.utf8) }
