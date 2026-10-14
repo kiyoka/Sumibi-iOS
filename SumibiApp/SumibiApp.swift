@@ -239,7 +239,7 @@ private struct ContentView: View {
                     loadUsageStatistics()
                 })
             } label: {
-                Label("Sumibiに相談", systemImage: "bubble.left.and.bubble.right")
+                Label("チャットで質問", systemImage: "bubble.left.and.bubble.right")
             }
             .disabled(!hasLoadedSettings || hasUnsavedAPISettings)
         } footer: {
@@ -393,7 +393,7 @@ private struct ContentView: View {
         } header: {
             Text("キーボード設定")
         } footer: {
-            Text("すべて初期設定はONです。変換完了時は短く2回振動します。クリック音はiOS本体の消音・音量・キーボードの設定に従います。")
+            Text("すべて初期設定はONです。変換完了時は短く2回振動します。クリック音はキーの種類で変わり、iOS本体の消音・音量に従います。音のON/OFFは上のスイッチで設定してください。フルアクセスが無効な場合はiOS標準のクリック音を使用します。")
         }
     }
 

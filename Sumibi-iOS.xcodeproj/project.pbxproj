@@ -37,6 +37,8 @@
 		A1000000000000000000001C /* FantasyGameEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* FantasyGameEffectView.swift */; };
 		A1000000000000000000001E /* RPGWizard.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* RPGWizard.png */; };
 		A1000000000000000000001F /* PersianCatAim.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* PersianCatAim.png */; };
+		A10000000000000000000022 /* KeyClickSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* KeyClickSound.swift */; };
+		A10000000000000000000023 /* Sounds in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* Sounds */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +112,8 @@
 		A2000000000000000000001E /* FantasyGameEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyGameEffectView.swift; sourceTree = "<group>"; };
 		A20000000000000000000020 /* RPGWizard.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = RPGWizard.png; sourceTree = "<group>"; };
 		A20000000000000000000021 /* PersianCatAim.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = PersianCatAim.png; sourceTree = "<group>"; };
+		A20000000000000000000022 /* KeyClickSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyClickSound.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* Sounds */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sounds; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,6 +168,8 @@
 		A80000000000000000000003 /* SumibiKeyboard */ = {
 			isa = PBXGroup;
 			children = (
+				A20000000000000000000022 /* KeyClickSound.swift */,
+				A20000000000000000000023 /* Sounds */,
 				A20000000000000000000011 /* KeyboardIcon.png */,
 				A20000000000000000000017 /* RPGDragon.png */,
 				A20000000000000000000016 /* DragonGameEffectView.swift */,
@@ -322,6 +328,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000023 /* Sounds in Resources */,
 				A1000000000000000000000F /* KeyboardIcon.png in Resources */,
 				A10000000000000000000015 /* RPGDragon.png in Resources */,
 				A10000000000000000000017 /* SpaceLaserShip.png in Resources */,
@@ -357,6 +364,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000022 /* KeyClickSound.swift in Sources */,
 				A10000000000000000000002 /* KeyboardViewController.swift in Sources */,
 				A10000000000000000000014 /* DragonGameEffectView.swift in Sources */,
 				A10000000000000000000016 /* SpaceLaserEffectView.swift in Sources */,
