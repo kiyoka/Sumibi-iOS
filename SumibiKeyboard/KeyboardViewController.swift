@@ -253,6 +253,7 @@ final class KeyboardViewController: UIInputViewController {
     private var symbolPanel: UIStackView?
     private var symbolToggleButton: UIButton?
     private var repeatableKeyKinds: [ObjectIdentifier: RepeatableKeyKind] = [:]
+    private let keyClickSoundPlayer = KeyClickSoundPlayer()
     private var pressedLabelOverlays: [ObjectIdentifier: UILabel] = [:]
     private var keyAnimationGenerations: [ObjectIdentifier: UInt] = [:]
     private var keyPressStartTimes: [ObjectIdentifier: CFTimeInterval] = [:]
@@ -287,12 +288,16 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        if hasFullAccess, sharedSettings?.loadKeyClickSoundEnabled() ?? true {
+            keyClickSoundPlayer.prepare()
+        }
         refreshGamePreferences()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopKeyRepeat()
+        keyClickSoundPlayer.suspend()
         stopGameEnergyUpdates()
         gameEnergy.reset()
         gameDocumentIdentifier = nil
@@ -621,12 +626,14 @@ final class KeyboardViewController: UIInputViewController {
         let shiftButton = makeSpecialButton(
             title: "⇧",
             accessibilityLabel: "Shift",
-            action: #selector(shiftTapped)
+            action: #selector(shiftTapped),
+            role: .shift
         )
         let deleteButton = makeSpecialButton(
             title: "⌫",
             accessibilityLabel: "削除",
-            action: #selector(deleteTapped)
+            action: #selector(deleteTapped),
+            role: .delete
         )
         configureDeleteButton(deleteButton)
         let letters = ["z", "x", "c", "v", "b", "n", "m"].map(makeLetterButton)
@@ -655,7 +662,8 @@ final class KeyboardViewController: UIInputViewController {
         let symbolButton = makeSpecialButton(
             title: "記号",
             accessibilityLabel: "記号一覧",
-            action: #selector(symbolToggleTapped)
+            action: #selector(symbolToggleTapped),
+            role: .symbolToggle
         )
         symbolButton.accessibilityIdentifier = "symbol-toggle"
         symbolButton.accessibilityValue = "非表示"
@@ -668,25 +676,29 @@ final class KeyboardViewController: UIInputViewController {
         let spaceButton = makeSpecialButton(
             title: "空白",
             accessibilityLabel: "空白",
-            action: #selector(spaceTapped)
+            action: #selector(spaceTapped),
+            role: .space
         )
         registerKeyRepeat(for: spaceButton, kind: .space)
         let convertButton = makeSpecialButton(
             title: "変換",
             accessibilityLabel: "変換",
-            action: #selector(convertTapped)
+            action: #selector(convertTapped),
+            role: .convert
         )
         let returnButton = makeSpecialButton(
             title: "改行",
             accessibilityLabel: "改行",
-            action: #selector(returnTapped)
+            action: #selector(returnTapped),
+            role: .returnKey
         )
         self.convertButton = convertButton
 
         let nextKeyboardButton = makeSpecialButton(
             title: "",
             accessibilityLabel: "次のキーボード",
-            action: #selector(nextKeyboardTapped)
+            action: #selector(nextKeyboardTapped),
+            role: .nextKeyboard
         )
         nextKeyboardButton.configuration?.image = UIImage(systemName: "globe")
         nextKeyboardButton.accessibilityHint = "次のキーボードへ切り替えます"
@@ -733,7 +745,8 @@ final class KeyboardViewController: UIInputViewController {
     private func makeLetterButton(_ letter: String) -> UIButton {
         let button = makeKeyButton(
             title: displayedLetter(letter),
-            accessibilityLabel: letter.uppercased()
+            accessibilityLabel: letter.uppercased(),
+            role: .letter
         )
         button.accessibilityIdentifier = letter
         button.addTarget(self, action: #selector(letterTapped), for: .touchUpInside)
@@ -745,7 +758,8 @@ final class KeyboardViewController: UIInputViewController {
     private func makeSymbolButton(_ symbol: String) -> UIButton {
         let button = makeKeyButton(
             title: symbol,
-            accessibilityLabel: symbolAccessibilityLabel(symbol)
+            accessibilityLabel: symbolAccessibilityLabel(symbol),
+            role: .symbol
         )
         button.accessibilityIdentifier = symbol
         button.addTarget(self, action: #selector(symbolTapped), for: .touchUpInside)
@@ -756,7 +770,8 @@ final class KeyboardViewController: UIInputViewController {
     private func makeNumberButton(_ number: String) -> UIButton {
         let button = makeKeyButton(
             title: number,
-            accessibilityLabel: "数字 \(number)"
+            accessibilityLabel: "数字 \(number)",
+            role: .number
         )
         button.accessibilityIdentifier = number
         button.addTarget(self, action: #selector(numberTapped), for: .touchUpInside)
@@ -797,7 +812,7 @@ final class KeyboardViewController: UIInputViewController {
             stopKeyRepeat()
             repeatingButton = button
             animateKeyPress(button)
-            playKeyClick()
+            playKeyClick(KeyClickSound.Role.delete.sound)
             if sharedSettings?.loadHapticFeedbackEnabled() ?? true {
                 hapticFeedbackGenerator.prepare()
                 hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
@@ -842,7 +857,7 @@ final class KeyboardViewController: UIInputViewController {
             stopKeyRepeat()
             return
         }
-        playKeyClick()
+        playKeyClick((button as? SoundFeedbackButton)?.clickSound ?? .character)
         switch kind {
         case .letter:
             letterTapped(button)
@@ -921,15 +936,20 @@ final class KeyboardViewController: UIInputViewController {
     private func makeSpecialButton(
         title: String,
         accessibilityLabel: String,
-        action: Selector
+        action: Selector,
+        role: KeyClickSound.Role
     ) -> UIButton {
-        let button = makeKeyButton(title: title, accessibilityLabel: accessibilityLabel)
+        let button = makeKeyButton(title: title, accessibilityLabel: accessibilityLabel, role: role)
         button.configuration?.baseBackgroundColor = .systemGray3
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
 
-    private func makeKeyButton(title: String, accessibilityLabel: String) -> UIButton {
+    private func makeKeyButton(
+        title: String,
+        accessibilityLabel: String,
+        role: KeyClickSound.Role
+    ) -> UIButton {
         var configuration = UIButton.Configuration.filled()
         configuration.title = title
         configuration.baseBackgroundColor = .systemBackground
@@ -942,7 +962,8 @@ final class KeyboardViewController: UIInputViewController {
             trailing: 2
         )
 
-        let button = UIButton(configuration: configuration)
+        let button = SoundFeedbackButton(configuration: configuration)
+        button.clickSound = role.sound
         button.titleLabel?.font = .systemFont(ofSize: KeyPressAnimationMetrics.normalLabelFontSize)
         button.clipsToBounds = false
         button.accessibilityLabel = accessibilityLabel
@@ -959,7 +980,7 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func keyTouchDown(_ sender: UIButton) {
         animateKeyPress(sender)
-        playKeyClick()
+        playKeyClick((sender as? SoundFeedbackButton)?.clickSound ?? .character)
         if sharedSettings?.loadHapticFeedbackEnabled() ?? true {
             hapticFeedbackGenerator.prepare()
             hapticFeedbackGenerator.impactOccurred(intensity: 0.7)
@@ -1206,11 +1227,12 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func playKeyClick() {
-        guard sharedSettings?.loadKeyClickSoundEnabled() ?? true else {
-            return
-        }
-        UIDevice.current.playInputClick()
+    private func playKeyClick(_ sound: KeyClickSound) {
+        keyClickSoundPlayer.play(
+            sound,
+            enabled: sharedSettings?.loadKeyClickSoundEnabled() ?? true,
+            hasFullAccess: hasFullAccess
+        )
     }
 
     private func displayedLetter(_ letter: String) -> String {

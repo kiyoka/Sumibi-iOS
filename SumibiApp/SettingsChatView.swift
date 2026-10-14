@@ -88,7 +88,7 @@ struct SettingsChatView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom) { composer }
-        .navigationTitle("Sumibiに相談")
+        .navigationTitle("チャットで質問")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { refreshConnection() }
         .onDisappear {
@@ -100,6 +100,8 @@ struct SettingsChatView: View {
 
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Text("ここでは設定済みのAIと会話します。開発者や人間の担当者への問い合わせではありません。")
+                .font(.subheadline)
             Text("使い方、遊び心のあるキーボード、概算費用を質問できます。モデル、音や振動の設定変更もできます。")
             Text("変更内容を確認し、「適用する」を押すと保存されます。")
                 .font(.subheadline)
@@ -153,7 +155,7 @@ struct SettingsChatView: View {
 
     private func messageView(_ entry: ChatEntry) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(entry.role == .user ? "あなた" : "Sumibi")
+            Text(entry.role == .user ? "あなた" : "AI（Sumibi）")
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
             Text(entry.text).textSelection(.enabled)
