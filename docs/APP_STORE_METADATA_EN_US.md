@@ -73,7 +73,6 @@ romaji,IME,typing,conversion,QWERTY,kanji,kana,writing,input,language
 
 ```text
 • Added writing-style presets for output language, tone, punctuation, and formatting
-• Added an in-app comparison of results with and without a writing-style prompt
 • Added Ember Glass effects to conversion controls on iOS 26 and later
 • Improved key, candidate-selection, and conversion-state animations
 • Refined delete-key repeat timing and key-press responsiveness
