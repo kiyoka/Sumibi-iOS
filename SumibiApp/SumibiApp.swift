@@ -62,6 +62,13 @@ private struct ContentView: View {
                 usageSection
                 keyboardSetupSection
                 privacySection
+                Section("このアプリについて") {
+                    NavigationLink {
+                        LicenseView()
+                    } label: {
+                        Label("ライセンス", systemImage: "doc.text")
+                    }
+                }
             }
             .navigationTitle("Sumibi")
             .alert(
