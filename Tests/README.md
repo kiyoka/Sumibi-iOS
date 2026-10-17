@@ -1,5 +1,36 @@
 # 設定チャットの回帰確認
 
+## 同梱辞書の候補補完
+
+実API・実キーを使わず、読み条件、出所、独立した候補上限、中黒、欠損時動作、
+実データ、既存ユーザー辞書の送信維持とローカル索引の非送信を確認します。
+記号のローマ字／かな、ひらがな応答なしでの記号補完、LLMとの重複・上限・中黒優先、索引の独立読み込みも確認します。
+ホスト側の読み込み速度・ピークRSS増加も参考値として出力します。
+
+```sh
+swiftc -O -module-cache-path /private/tmp/sumibi-dictionary-cache \
+  SumibiCore/ConversionClient.swift SumibiCore/SharedSettings.swift \
+  SumibiCore/SettingsChat.swift SumibiCore/OpenAICompatibleClient.swift \
+  SumibiCore/SupplementalCandidateDictionary.swift Tests/SupplementalCandidateDictionaryTests.swift \
+  -o /private/tmp/sumibi-dictionary-tests
+/private/tmp/sumibi-dictionary-tests
+python3 -B Tests/MozcSymbolGeneratorTests.py
+```
+
+UIの検証では、シミュレーター向けDebugビルドのProductsディレクトリを指定します。
+`Tools/build_dictionary_preview.swift` は、本番コードの一時コピーへテストを連結するだけで、
+製品のアクセス制御やターゲットを変更しません。出力したアプリをシミュレーターへ入れて起動すると、
+実際の候補セッションを使い、4画面幅・Light／Dark・本文と注釈の分離・Undo・編集後の置換防止を確認します。
+アプリのDocumentsに `DictionaryPreview-result.txt` を出力します。
+`--dark` は最終プレビューをDarkにし、`--licenses` は実際のライセンス画面だけを表示します。
+`--symbols` は星印の候補を最終プレビューへ表示します。ライセンス原文の読み込み、丸数字・矢印・数学記号の選択とUndoも検証します。
+
+```sh
+swift Tools/build_dictionary_preview.swift /path/to/Build/Products/Debug-iphonesimulator
+```
+
+## 既存の設定チャット
+
 キークリック音の分類・OFF／フォールバック・WAV品質・再生成一致の確認は、[キークリック音仕様](../docs/KEY_CLICK_SOUNDS_JA.md)に手順があります。実際の音量・消音・打鍵感の確認は実機で別途行います。
 
 API通信をモックし、設定案の検証・一括適用・古い設定案の拒否・旧版の利用統計・送信内容・既存の変換処理を確認します。実APIや実APIキーは使いません。

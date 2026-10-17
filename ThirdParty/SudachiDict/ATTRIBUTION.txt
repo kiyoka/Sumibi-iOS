@@ -1,0 +1,20 @@
+SudachiDict Core-derived candidate index (version 20260723)
+
+Copyright (c) 2017-2023 Works Applications Co., Ltd.
+Licensed under the Apache License, Version 2.0.
+
+Upstream: https://github.com/WorksApplications/SudachiDict/tree/v20260723
+
+Sumibi uses an extracted and transformed candidate index, not the full original
+Sudachi dictionary. Common-noun surfaces containing kanji were selected from
+small_lex.csv and core_lex.csv, readings converted to hiragana, duplicate surfaces
+removed, and up to 32 surfaces per reading ranked by word cost.
+The initial iOS adaptation was prepared on 2026-10-16.
+
+The index is derived from third-party data and is not covered solely by Sumibi's
+MIT license. See LICENSE-2.0.txt for the complete Apache license and LEGAL for
+the original UniDic and NEologd copyright, redistribution, disclaimer and
+attribution notices. Those original documents are included without modification.
+
+Sumibi's separate BuiltinCandidates.tsv contains original MIT-licensed mappings
+for the Japanese middle dot, and is not derived from SudachiDict.

@@ -188,6 +188,7 @@ final class KeyboardViewController: UIInputViewController {
         var options: [String]
         var current: String
         var hasRequestedAdditionalCandidates: Bool
+        var dictionaryCandidates: Set<String> = []
     }
 
     private struct UndoRecord {
@@ -203,6 +204,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private lazy var sharedSettings = SharedSettingsStore()
+    private static let supplementalDictionary = SupplementalCandidateDictionary.load(
+        from: Bundle(for: KeyboardViewController.self)
+    )
     private let hapticFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
     private let conversionCompletionFeedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let candidateStack = UIStackView()
@@ -1368,14 +1372,43 @@ final class KeyboardViewController: UIInputViewController {
         }
         var candidateButtons: [UIButton] = []
         for (index, option) in session.options.enumerated() {
-            let title = option == session.original ? "原文" : option
+            var title = option == session.original ? "原文" : option
+            let usesSymbolFallback = session.dictionaryCandidates.contains(option)
+                && option.unicodeScalars.count == 1
+                && option.unicodeScalars.first?.properties.isEmoji == true
+            if usesSymbolFallback {
+                // Prefer the text glyph for symbol-dictionary entries (e.g. ✡).
+                // Emoji fallback has a taller line box. This is display-only;
+                // selection still inserts the unmodified session option.
+                title += "\u{FE0E}"
+            }
             let tintColor = option == session.current
                 ? UIColor.systemOrange.withAlphaComponent(0.30)
                 : UIColor.systemOrange.withAlphaComponent(0.14)
-            let configuration = makeCandidateButtonConfiguration(
+            var configuration = makeCandidateButtonConfiguration(
                 title: title,
                 tintColor: tintColor
             )
+            if option != session.original {
+                configuration.subtitle = session.dictionaryCandidates.contains(option) ? "辞書" : "LLM"
+                configuration.titleAlignment = .center
+                configuration.titlePadding = 0
+                configuration.contentInsets.top = 1
+                configuration.contentInsets.bottom = 1
+                configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+                    var attributes = $0
+                    // Emoji-capable symbol fonts have a taller line box; keep
+                    // their glyphs within the existing 40pt candidate bar.
+                    attributes.font = .systemFont(ofSize: usesSymbolFallback ? 13 : 15)
+                    return attributes
+                }
+                configuration.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+                    var attributes = $0
+                    attributes.font = .systemFont(ofSize: 14, weight: .medium)
+                    attributes.foregroundColor = .secondaryLabel
+                    return attributes
+                }
+            }
 
             let button = UIButton(configuration: configuration)
             if #available(iOS 27.0, *) {
@@ -1391,7 +1424,7 @@ final class KeyboardViewController: UIInputViewController {
             button.tag = index
             button.accessibilityLabel = option == session.original
                 ? "原文、\(option)"
-                : "変換候補、\(option)"
+                : "変換候補、\(option)、\(session.dictionaryCandidates.contains(option) ? "辞書" : "LLM")"
             button.isSelected = option == session.current
             button.addTarget(self, action: #selector(candidateTapped), for: .touchUpInside)
             candidateStack.addArrangedSubview(button)
@@ -2411,30 +2444,24 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        let responseCandidates = response.candidates
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        var options = session.options.filter { $0 != session.original }
-        if !options.contains(session.current) {
-            options.insert(session.current, at: 0)
-        }
-        for candidate in responseCandidates where !options.contains(candidate) {
-            guard options.count < ConversionCandidateMode.additional.candidateCount else {
-                break
-            }
-            options.append(candidate)
-        }
-        guard options.count > 1 else {
+        let combined = AdditionalCandidateList(
+            original: session.original,
+            current: session.current,
+            existingOptions: session.options,
+            existingDictionaryCandidates: session.dictionaryCandidates,
+            llmCandidates: response.candidates,
+            dictionary: Self.supplementalDictionary,
+            maximumLLMCount: ConversionCandidateMode.additional.candidateCount
+        )
+        guard combined.options.contains(where: { $0 != session.current && $0 != session.original }) else {
             endEmberConversionAnimation(success: false)
             additionalCandidateErrorMessage = "追加候補を取得できませんでした"
             showCandidates()
             return
         }
 
-        if !options.contains(session.original) {
-            options.append(session.original)
-        }
-        session.options = options
+        session.options = combined.options
+        session.dictionaryCandidates = combined.dictionaryCandidates
         candidateSession = session
         additionalCandidateErrorMessage = nil
         showCandidates(animated: true)

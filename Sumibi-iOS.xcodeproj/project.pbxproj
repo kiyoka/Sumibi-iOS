@@ -39,6 +39,14 @@
 		A1000000000000000000001F /* PersianCatAim.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* PersianCatAim.png */; };
 		A10000000000000000000022 /* KeyClickSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* KeyClickSound.swift */; };
 		A10000000000000000000023 /* Sounds in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* Sounds */; };
+/* Issue 132 resources and sources */
+		B13200000000000000000001 = {isa = PBXBuildFile; fileRef = B13200000000000000000011; };
+		B13200000000000000000002 = {isa = PBXBuildFile; fileRef = B13200000000000000000012; };
+		B13200000000000000000003 = {isa = PBXBuildFile; fileRef = B13200000000000000000013; };
+		B13200000000000000000004 = {isa = PBXBuildFile; fileRef = B13200000000000000000014; };
+		B13200000000000000000005 = {isa = PBXBuildFile; fileRef = B13200000000000000000014; };
+		B13200000000000000000006 = {isa = PBXBuildFile; fileRef = B13200000000000000000015; };
+		B13200000000000000000007 = {isa = PBXBuildFile; fileRef = B13200000000000000000015; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -114,6 +122,11 @@
 		A20000000000000000000021 /* PersianCatAim.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = PersianCatAim.png; sourceTree = "<group>"; };
 		A20000000000000000000022 /* KeyClickSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyClickSound.swift; sourceTree = "<group>"; };
 		A20000000000000000000023 /* Sounds */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sounds; sourceTree = "<group>"; };
+		B13200000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementalCandidateDictionary.swift; sourceTree = "<group>"; };
+		B13200000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseView.swift; sourceTree = "<group>"; };
+		B13200000000000000000013 = {isa = PBXFileReference; lastKnownFileType = folder; path = ConversionDictionary; sourceTree = "<group>"; };
+		B13200000000000000000014 = {isa = PBXFileReference; lastKnownFileType = folder; path = ThirdParty; sourceTree = "<group>"; };
+		B13200000000000000000015 = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,6 +159,8 @@
 		A80000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				B13200000000000000000014 /* ThirdParty */,
+				B13200000000000000000015 /* LICENSE */,
 				A2000000000000000000000F /* PrivacyInfo.xcprivacy */,
 				A80000000000000000000002 /* SumibiApp */,
 				A80000000000000000000003 /* SumibiKeyboard */,
@@ -157,6 +172,7 @@
 		A80000000000000000000002 /* SumibiApp */ = {
 			isa = PBXGroup;
 			children = (
+				B13200000000000000000012 /* LicenseView.swift */,
 				A20000000000000000000010 /* Assets.xcassets */,
 				A20000000000000000000001 /* SumibiApp.swift */,
 				A20000000000000000000014 /* SettingsChatView.swift */,
@@ -168,6 +184,7 @@
 		A80000000000000000000003 /* SumibiKeyboard */ = {
 			isa = PBXGroup;
 			children = (
+				B13200000000000000000013 /* ConversionDictionary */,
 				A20000000000000000000022 /* KeyClickSound.swift */,
 				A20000000000000000000023 /* Sounds */,
 				A20000000000000000000011 /* KeyboardIcon.png */,
@@ -192,6 +209,7 @@
 		A80000000000000000000004 /* SumibiCore */ = {
 			isa = PBXGroup;
 			children = (
+				B13200000000000000000011 /* SupplementalCandidateDictionary.swift */,
 				A2000000000000000000000B /* APIKeyStore.swift */,
 				A2000000000000000000000C /* CompositionTracker.swift */,
 				A2000000000000000000000D /* ConversionClient.swift */,
@@ -319,6 +337,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B13200000000000000000004 /* ThirdParty */,
+				B13200000000000000000006 /* LICENSE */,
 				A1000000000000000000000E /* Assets.xcassets in Resources */,
 				A1000000000000000000000C /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -328,6 +348,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B13200000000000000000003 /* ConversionDictionary */,
+				B13200000000000000000005 /* ThirdParty */,
+				B13200000000000000000007 /* LICENSE */,
 				A10000000000000000000023 /* Sounds in Resources */,
 				A1000000000000000000000F /* KeyboardIcon.png in Resources */,
 				A10000000000000000000015 /* RPGDragon.png in Resources */,
@@ -355,6 +378,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B13200000000000000000002 /* LicenseView.swift */,
 				A10000000000000000000001 /* SumibiApp.swift in Sources */,
 				A10000000000000000000012 /* SettingsChatView.swift in Sources */,
 			);
@@ -377,6 +401,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B13200000000000000000001 /* SupplementalCandidateDictionary.swift */,
 				A10000000000000000000008 /* APIKeyStore.swift in Sources */,
 				A10000000000000000000009 /* CompositionTracker.swift in Sources */,
 				A1000000000000000000000A /* ConversionClient.swift in Sources */,
@@ -441,7 +466,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
@@ -450,7 +475,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -467,7 +492,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
@@ -476,7 +501,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -492,12 +517,12 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
 				SKIP_INSTALL = YES;
@@ -512,12 +537,12 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
 				SKIP_INSTALL = YES;
