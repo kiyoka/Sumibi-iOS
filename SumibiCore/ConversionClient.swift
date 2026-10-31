@@ -45,19 +45,22 @@ public struct TokenUsage: Equatable, Sendable {
     public let inputTokens: Int
     public let cachedInputTokens: Int
     public let outputTokens: Int
+    public let unitemizedTokens: Int
 
     public init(
         inputTokens: Int,
         cachedInputTokens: Int = 0,
-        outputTokens: Int
+        outputTokens: Int,
+        unitemizedTokens: Int = 0
     ) {
         self.inputTokens = inputTokens
         self.cachedInputTokens = cachedInputTokens
         self.outputTokens = outputTokens
+        self.unitemizedTokens = unitemizedTokens
     }
 
     public var totalTokens: Int {
-        inputTokens + outputTokens
+        inputTokens + outputTokens + unitemizedTokens
     }
 }
 

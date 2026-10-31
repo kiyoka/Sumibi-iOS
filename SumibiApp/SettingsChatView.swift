@@ -242,13 +242,13 @@ struct SettingsChatView: View {
         }
         let apiKey: String?
         do {
-            apiKey = try APIKeyStore().load()
+            apiKey = try APIKeyStore().load(for: snapshot.provider.endpoint)
         } catch {
             connectionMessage = "保存したAPIキーを読み込めません。API設定を確認してください。"
             return
         }
-        if url.host?.lowercased() == "api.openai.com", apiKey?.isEmpty ?? true {
-            connectionMessage = "OpenAIのAPIキーを保存してから利用してください。"
+        if snapshot.provider.provider != .other, apiKey?.isEmpty ?? true {
+            connectionMessage = "選択したAIのAPIキーを保存してから利用してください。"
             return
         }
         let id = UUID()
@@ -277,7 +277,8 @@ struct SettingsChatView: View {
                 )
                 guard requestID == id, !Task.isCancelled else { return }
                 if let usage = completion.usage {
-                    store.recordUsage(usage, model: completion.model, isSettingsChat: true)
+                    store.recordUsage(usage, model: completion.model,
+                                      provider: snapshot.provider.provider, isSettingsChat: true)
                 }
                 let payload = try SettingsChatPayload.decode(completion.content)
                 let updated = try snapshot.applying(payload.changes)

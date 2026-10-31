@@ -70,6 +70,10 @@ public struct SettingsChatSnapshot: Equatable, Sendable {
                 guard !model.isEmpty, model.count <= 200,
                       !model.contains(where: { $0.isWhitespace || $0.isNewline })
                 else { throw SettingsChatError.invalidProposal }
+                if result.provider.provider == .google,
+                   GeminiModelOption(rawValue: model) == nil {
+                    throw SettingsChatError.invalidProposal
+                }
                 result.provider.model = model
             case .hapticFeedbackEnabled:
                 result.hapticFeedbackEnabled = try Self.bool(change.value)
@@ -116,20 +120,33 @@ public struct SettingsChatSnapshot: Equatable, Sendable {
             let summary: String?
         }
         struct Context: Encodable {
+            let provider: String
             let model: String
             let hapticFeedbackEnabled: Bool
             let conversionCompletionHapticEnabled: Bool
             let keyClickSoundEnabled: Bool
             let modelChoices: [ModelChoice]
         }
+        let modelChoices: [ModelChoice]
+        switch provider.provider {
+        case .openAI:
+            modelChoices = ModelOption.allCases.map {
+                ModelChoice(name: $0.displayName, modelID: $0.modelID, summary: $0.summary)
+            }
+        case .google:
+            modelChoices = GeminiModelOption.allCases.map {
+                ModelChoice(name: $0.displayName, modelID: $0.rawValue, summary: nil)
+            }
+        case .other:
+            modelChoices = [ModelChoice(name: "自由入力", modelID: nil, summary: nil)]
+        }
         let context = Context(
+            provider: provider.provider.displayName,
             model: provider.model,
             hapticFeedbackEnabled: hapticFeedbackEnabled,
             conversionCompletionHapticEnabled: conversionCompletionHapticEnabled,
             keyClickSoundEnabled: keyClickSoundEnabled,
-            modelChoices: ModelOption.allCases.map {
-                ModelChoice(name: $0.displayName, modelID: $0.modelID, summary: $0.summary)
-            }
+            modelChoices: modelChoices
         )
         return String(decoding: try JSONEncoder().encode(context), as: UTF8.self)
     }
@@ -164,6 +181,7 @@ public struct SettingsChatUsageContext: Sendable {
 
     func contextJSON() throws -> String {
         struct ModelUsage: Encodable {
+            let provider: String
             let model: String
             let collectionStartedAt: String?
             let conversionCount: Int
@@ -171,15 +189,17 @@ public struct SettingsChatUsageContext: Sendable {
             let inputTokens: Int
             let cachedInputTokens: Int
             let outputTokens: Int
+            let unitemizedTokens: Int
             let estimatedCostUSD: String?
 
             enum CodingKeys: String, CodingKey {
-                case model, collectionStartedAt, conversionCount, settingsChatCount
-                case inputTokens, cachedInputTokens, outputTokens, estimatedCostUSD
+                case provider, model, collectionStartedAt, conversionCount, settingsChatCount
+                case inputTokens, cachedInputTokens, outputTokens, unitemizedTokens, estimatedCostUSD
             }
 
             func encode(to encoder: Encoder) throws {
                 var values = encoder.container(keyedBy: CodingKeys.self)
+                try values.encode(provider, forKey: .provider)
                 try values.encode(model, forKey: .model)
                 // Explicit nulls distinguish missing history/pricing from zero cost.
                 try values.encode(collectionStartedAt, forKey: .collectionStartedAt)
@@ -188,6 +208,7 @@ public struct SettingsChatUsageContext: Sendable {
                 try values.encode(inputTokens, forKey: .inputTokens)
                 try values.encode(cachedInputTokens, forKey: .cachedInputTokens)
                 try values.encode(outputTokens, forKey: .outputTokens)
+                try values.encode(unitemizedTokens, forKey: .unitemizedTokens)
                 try values.encode(estimatedCostUSD, forKey: .estimatedCostUSD)
             }
         }
@@ -209,6 +230,7 @@ public struct SettingsChatUsageContext: Sendable {
             let cost = row.estimatedCostUSD
             if let cost { subtotal += cost }
             return ModelUsage(
+                provider: row.provider.displayName,
                 model: row.model,
                 collectionStartedAt: row.collectionStartedAt.map { formatter.string(from: $0) },
                 conversionCount: row.conversionCount,
@@ -216,6 +238,7 @@ public struct SettingsChatUsageContext: Sendable {
                 inputTokens: row.inputTokens,
                 cachedInputTokens: row.cachedInputTokens,
                 outputTokens: row.outputTokens,
+                unitemizedTokens: row.unitemizedTokens,
                 estimatedCostUSD: cost.map { NSDecimalNumber(decimal: $0).stringValue }
             )
         }
@@ -279,8 +302,8 @@ public struct SettingsChatCompletion: Sendable {
     public let usage: TokenUsage?
 }
 
-// Send a strict response schema only to the known OpenAI endpoint/models.
-// Other compatible services use the same JSON instructions and local validation.
+// Known OpenAI and Gemini models support structured output. Other compatible
+// services use the same JSON instructions and local validation without a schema.
 struct SettingsChatOutputFormat: Encodable {
     let type = "json_schema"
     let jsonSchema = Definition()

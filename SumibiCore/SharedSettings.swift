@@ -37,19 +37,67 @@ public enum ModelOption: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+public enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
+    case openAI, google, other
+
+    public var id: Self { self }
+    public var displayName: String {
+        switch self {
+        case .openAI: "OpenAI"
+        case .google: "Google"
+        case .other: "その他"
+        }
+    }
+    public var defaultEndpoint: String {
+        switch self {
+        case .openAI: ProviderConfiguration.defaultEndpoint
+        case .google: "https://generativelanguage.googleapis.com/v1beta/openai"
+        case .other: ""
+        }
+    }
+}
+
+public enum GeminiModelOption: String, CaseIterable, Identifiable, Sendable {
+    case quality = "gemini-3.6-flash"
+    case economy = "gemini-3.5-flash-lite"
+
+    public var id: Self { self }
+    public var displayName: String {
+        switch self {
+        case .quality: "精度重視：Gemini 3.6 Flash"
+        case .economy: "速度・費用重視：Gemini 3.5 Flash-Lite"
+        }
+    }
+}
+
 public struct ProviderConfiguration: Codable, Equatable, Sendable {
     public static let defaultEndpoint = "https://api.openai.com"
     public static let defaultModel = "gpt-6-sol"
+    public static let defaultGoogleModel = GeminiModelOption.quality.rawValue
 
     public var endpoint: String
     public var model: String
+    public var provider: AIProvider
 
     public init(
         endpoint: String = Self.defaultEndpoint,
-        model: String = Self.defaultModel
+        model: String = Self.defaultModel,
+        provider: AIProvider = .openAI
     ) {
         self.endpoint = endpoint
         self.model = model
+        self.provider = provider
+    }
+
+    private enum CodingKeys: String, CodingKey { case endpoint, model, provider }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        endpoint = try values.decode(String.self, forKey: .endpoint)
+        model = try values.decode(String.self, forKey: .model)
+        provider = try values.decodeIfPresent(AIProvider.self, forKey: .provider)
+            ?? (URL(string: endpoint)?.host?.lowercased() == "api.openai.com" ? .openAI
+                : URL(string: endpoint)?.host?.lowercased() == "generativelanguage.googleapis.com" ? .google : .other)
     }
 }
 
@@ -112,6 +160,7 @@ public struct SharedSettingsStore {
 
     private enum Key {
         static let providerConfiguration = "providerConfiguration"
+        static let providerConfigurations = "providerConfigurations"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let conversionCompletionHapticEnabled = "conversionCompletionHapticEnabled"
         static let keyClickSoundEnabled = "keyClickSoundEnabled"
@@ -156,18 +205,58 @@ public struct SharedSettingsStore {
                 ? ProviderConfiguration.defaultEndpoint
                 : configuration.endpoint,
             model: model.isEmpty
-                ? ProviderConfiguration.defaultModel
-                : configuration.model
+                ? (configuration.provider == .google
+                    ? ProviderConfiguration.defaultGoogleModel : ProviderConfiguration.defaultModel)
+                : configuration.model,
+            provider: configuration.provider
         )
     }
 
     public func saveProviderConfiguration(_ configuration: ProviderConfiguration) throws {
+        // Materialize provider attribution while the previous endpoint is still active.
+        let migratedUsageData: Data?
+        if let usageData = defaults.data(forKey: Key.usageStatistics),
+           let rows = (try? JSONSerialization.jsonObject(with: usageData)) as? [[String: Any]],
+           rows.contains(where: { $0["provider"] == nil }) {
+            migratedUsageData = try encoder.encode(loadUsageStatistics())
+        } else {
+            migratedUsageData = nil
+        }
+        var configurations = (defaults.data(forKey: Key.providerConfigurations)
+            .flatMap { try? decoder.decode([AIProvider: ProviderConfiguration].self, from: $0) }) ?? [:]
+        let previous = loadProviderConfiguration()
+        if configurations[previous.provider] == nil {
+            configurations[previous.provider] = previous
+        }
+        configurations[configuration.provider] = configuration
         let data = try encoder.encode(configuration)
+        let allData = try encoder.encode(configurations)
+        if let migratedUsageData {
+            defaults.set(migratedUsageData, forKey: Key.usageStatistics)
+        }
+        defaults.set(allData, forKey: Key.providerConfigurations)
         defaults.set(data, forKey: Key.providerConfiguration)
+    }
+
+    public func loadProviderConfiguration(for provider: AIProvider) -> ProviderConfiguration {
+        if let data = defaults.data(forKey: Key.providerConfigurations),
+           let configurations = try? decoder.decode([AIProvider: ProviderConfiguration].self, from: data),
+           let configuration = configurations[provider] {
+            return configuration
+        }
+        let active = loadProviderConfiguration()
+        if active.provider == provider { return active }
+        return ProviderConfiguration(
+            endpoint: provider.defaultEndpoint,
+            model: provider == .openAI ? ProviderConfiguration.defaultModel
+                : provider == .google ? ProviderConfiguration.defaultGoogleModel : "",
+            provider: provider
+        )
     }
 
     public func resetProviderConfiguration() {
         defaults.removeObject(forKey: Key.providerConfiguration)
+        defaults.removeObject(forKey: Key.providerConfigurations)
     }
 
     public func loadSettingsChatSnapshot() -> SettingsChatSnapshot {
@@ -325,18 +414,34 @@ public struct SharedSettingsStore {
         else {
             return []
         }
-        return statistics.sorted { $0.model.localizedStandardCompare($1.model) == .orderedAscending }
+        var migrated = statistics
+        if let rawRows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] {
+            let legacyProvider = loadProviderConfiguration().provider
+            for index in migrated.indices where index < rawRows.count {
+                if rawRows[index]["provider"] == nil {
+                    migrated[index].provider = legacyProvider
+                }
+            }
+        }
+        return migrated.sorted {
+            $0.id.localizedStandardCompare($1.id) == .orderedAscending
+        }
     }
 
-    public func recordUsage(_ usage: TokenUsage, model: String, isSettingsChat: Bool = false) {
+    public func recordUsage(
+        _ usage: TokenUsage, model: String, provider: AIProvider = .openAI,
+        isSettingsChat: Bool = false, at timestamp: Date = Date()
+    ) {
         let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedModel.isEmpty else {
             return
         }
         var statistics = loadUsageStatistics()
-        if let index = statistics.firstIndex(where: { $0.model == normalizedModel }) {
+        let requestCost = ModelPricing.pricing(for: normalizedModel, provider: provider, at: timestamp)?
+            .estimatedCost(for: usage)
+        if let index = statistics.firstIndex(where: { $0.model == normalizedModel && $0.provider == provider }) {
             if statistics[index].collectionStartedAt == nil {
-                statistics[index].collectionStartedAt = Date()
+                statistics[index].collectionStartedAt = timestamp
             }
             if isSettingsChat {
                 statistics[index].settingsChatCount += 1
@@ -346,16 +451,23 @@ public struct SharedSettingsStore {
             statistics[index].inputTokens += usage.inputTokens
             statistics[index].cachedInputTokens += usage.cachedInputTokens
             statistics[index].outputTokens += usage.outputTokens
+            statistics[index].unitemizedTokens += usage.unitemizedTokens
+            if provider == .google, let requestCost {
+                statistics[index].recordedCostUSD = (statistics[index].recordedCostUSD ?? 0) + requestCost
+            }
         } else {
             statistics.append(
                 ModelUsageStatistics(
                     model: normalizedModel,
+                    provider: provider,
                     conversionCount: isSettingsChat ? 0 : 1,
                     settingsChatCount: isSettingsChat ? 1 : 0,
                     inputTokens: usage.inputTokens,
                     cachedInputTokens: usage.cachedInputTokens,
                     outputTokens: usage.outputTokens,
-                    collectionStartedAt: Date()
+                    unitemizedTokens: usage.unitemizedTokens,
+                    collectionStartedAt: timestamp,
+                    recordedCostUSD: provider == .google ? requestCost : nil
                 )
             )
         }
@@ -366,7 +478,7 @@ public struct SharedSettingsStore {
 
     public func resetUsageStatistics() {
         let reset = loadUsageStatistics().map {
-            ModelUsageStatistics(model: $0.model, collectionStartedAt: Date())
+            ModelUsageStatistics(model: $0.model, provider: $0.provider, collectionStartedAt: Date())
         }
         if let data = try? encoder.encode(reset) {
             defaults.set(data, forKey: Key.usageStatistics)
@@ -375,65 +487,74 @@ public struct SharedSettingsStore {
 }
 
 public struct ModelUsageStatistics: Codable, Equatable, Identifiable, Sendable {
-    public var id: String { model }
+    public var id: String { "\(provider.rawValue):\(model)" }
 
     public let model: String
+    public var provider: AIProvider
     public var conversionCount: Int
     public var settingsChatCount: Int
     public var inputTokens: Int
     public var cachedInputTokens: Int
     public var outputTokens: Int
+    public var unitemizedTokens: Int
     public var collectionStartedAt: Date?
+    public var recordedCostUSD: Decimal?
 
     public init(
         model: String,
+        provider: AIProvider = .openAI,
         conversionCount: Int = 0,
         settingsChatCount: Int = 0,
         inputTokens: Int = 0,
         cachedInputTokens: Int = 0,
         outputTokens: Int = 0,
-        collectionStartedAt: Date? = nil
+        unitemizedTokens: Int = 0,
+        collectionStartedAt: Date? = nil,
+        recordedCostUSD: Decimal? = nil
     ) {
         self.model = model
+        self.provider = provider
         self.conversionCount = conversionCount
         self.settingsChatCount = settingsChatCount
         self.inputTokens = inputTokens
         self.cachedInputTokens = cachedInputTokens
         self.outputTokens = outputTokens
+        self.unitemizedTokens = unitemizedTokens
         self.collectionStartedAt = collectionStartedAt
+        self.recordedCostUSD = recordedCostUSD
     }
 
     private enum CodingKeys: String, CodingKey {
-        case model, conversionCount, settingsChatCount
-        case inputTokens, cachedInputTokens, outputTokens, collectionStartedAt
+        case model, provider, conversionCount, settingsChatCount
+        case inputTokens, cachedInputTokens, outputTokens, unitemizedTokens
+        case collectionStartedAt, recordedCostUSD
     }
 
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         model = try values.decode(String.self, forKey: .model)
+        provider = try values.decodeIfPresent(AIProvider.self, forKey: .provider) ?? .openAI
         conversionCount = try values.decode(Int.self, forKey: .conversionCount)
         settingsChatCount = try values.decodeIfPresent(Int.self, forKey: .settingsChatCount) ?? 0
         inputTokens = try values.decode(Int.self, forKey: .inputTokens)
         cachedInputTokens = try values.decode(Int.self, forKey: .cachedInputTokens)
         outputTokens = try values.decode(Int.self, forKey: .outputTokens)
+        unitemizedTokens = try values.decodeIfPresent(Int.self, forKey: .unitemizedTokens) ?? 0
         collectionStartedAt = try values.decodeIfPresent(Date.self, forKey: .collectionStartedAt)
+        recordedCostUSD = try values.decodeIfPresent(Decimal.self, forKey: .recordedCostUSD)
     }
 
     public var totalTokens: Int {
-        inputTokens + outputTokens
+        inputTokens + outputTokens + unitemizedTokens
     }
 
     public var estimatedCostUSD: Decimal? {
-        guard let pricing = ModelPricing.pricing(for: model) else {
-            return nil
-        }
-        let cached = min(cachedInputTokens, inputTokens)
-        let uncached = inputTokens - cached
-        return (
-            Decimal(uncached) * pricing.input
-                + Decimal(cached) * pricing.cachedInput
-                + Decimal(outputTokens) * pricing.output
-        ) / 1_000_000
+        if provider == .google && unitemizedTokens > 0 { return nil }
+        if provider == .google, let recordedCostUSD { return recordedCostUSD }
+        return ModelPricing.pricing(for: model, provider: provider)?
+            .estimatedCost(for: TokenUsage(inputTokens: inputTokens,
+                                           cachedInputTokens: cachedInputTokens,
+                                           outputTokens: outputTokens))
     }
 }
 
@@ -442,8 +563,30 @@ private struct ModelPricing {
     let cachedInput: Decimal
     let output: Decimal
 
-    static func pricing(for model: String) -> ModelPricing? {
+    func estimatedCost(for usage: TokenUsage) -> Decimal {
+        let cached = min(usage.cachedInputTokens, usage.inputTokens)
+        return (Decimal(usage.inputTokens - cached) * input
+                + Decimal(cached) * cachedInput
+                + Decimal(usage.outputTokens) * output) / 1_000_000
+    }
+
+    static func pricing(for model: String, provider: AIProvider, at date: Date = Date()) -> ModelPricing? {
         let normalized = model.lowercased()
+        if provider == .google {
+            // Google Gemini API paid-tier Standard text pricing, checked 2026-10-31.
+            // https://ai.google.dev/gemini-api/docs/pricing
+            if normalized == GeminiModelOption.quality.rawValue {
+                let introductory = date < ISO8601DateFormatter().date(from: "2027-01-01T00:00:00Z")!
+                return introductory
+                    ? ModelPricing(input: 0.75, cachedInput: 0.075, output: 3.75)
+                    : ModelPricing(input: 1.5, cachedInput: 0.15, output: 7.5)
+            }
+            if normalized == GeminiModelOption.economy.rawValue {
+                return ModelPricing(input: 0.3, cachedInput: 0.03, output: 2.5)
+            }
+            return nil
+        }
+        guard provider == .openAI else { return nil }
         if normalized == "gpt-6-sol" || normalized.hasPrefix("gpt-6-sol-") {
             return ModelPricing(input: 2, cachedInput: 0.2, output: 10)
         }
