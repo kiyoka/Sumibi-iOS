@@ -1978,7 +1978,8 @@ final class KeyboardViewController: UIInputViewController {
         let model = response.model
             ?? sharedSettings?.loadProviderConfiguration().model
             ?? ProviderConfiguration.defaultModel
-        sharedSettings?.recordUsage(usage, model: model)
+        let provider = sharedSettings?.loadProviderConfiguration().provider ?? .openAI
+        sharedSettings?.recordUsage(usage, model: model, provider: provider)
     }
 
     private func errorPresentation(for error: Error) -> (message: String, retryable: Bool) {
@@ -2037,7 +2038,7 @@ final class KeyboardViewController: UIInputViewController {
             return nil
         }
 
-        let apiKey = try? APIKeyStore().load()
+        let apiKey = try? APIKeyStore().load(for: configuration.endpoint)
         return OpenAICompatibleClient(
             configuration: OpenAICompatibleConfiguration(
                 endpoint: endpoint,

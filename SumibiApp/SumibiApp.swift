@@ -21,13 +21,16 @@ private struct ContentView: View {
     }
 
     @State private var endpoint = ProviderConfiguration.defaultEndpoint
+    @State private var provider = AIProvider.openAI
     @State private var model = ProviderConfiguration.defaultModel
     @State private var selectedModelOption = ModelOption.selection(
         for: ProviderConfiguration.defaultModel
     )
+    @State private var selectedGeminiModel = GeminiModelOption.quality
     @State private var apiKey = ""
     @State private var savedEndpoint = ""
     @State private var savedModel = ""
+    @State private var savedProvider = AIProvider.openAI
     @State private var hasLoadedSettings = false
     @State private var hasStoredAPIKey = false
     @State private var storedAPIKeyDisplay: String?
@@ -98,6 +101,7 @@ private struct ContentView: View {
             .onChange(of: endpoint) { _, newEndpoint in
                 hasAIDataSharingConsent = SharedSettingsStore()?
                     .hasAIDataSharingConsent(for: newEndpoint) ?? false
+                refreshStoredAPIKey(for: newEndpoint)
             }
             .onChange(of: hasAIDataSharingConsent) { _, isEnabled in
                 updateAIDataSharingConsent(isEnabled)
@@ -129,27 +133,52 @@ private struct ContentView: View {
 
     private var providerSection: some View {
         Section {
-            TextField("例：https://api.openai.com", text: $endpoint)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($focusedAPIField, equals: .endpoint)
-
-            Picker("モデル", selection: $selectedModelOption) {
-                ForEach(ModelOption.allCases) { option in
-                    Text(option.pickerLabel).tag(option)
+            Picker("接続先", selection: Binding(
+                get: { provider },
+                set: { selectProvider($0) }
+            )) {
+                ForEach(AIProvider.allCases) { option in
+                    Text(option.displayName).tag(option)
                 }
             }
-            .onChange(of: selectedModelOption) { _, newValue in
-                if let modelID = newValue.modelID {
-                    model = modelID
-                } else if ModelOption.selection(for: model) != .custom {
-                    model = ""
-                }
-            }
-            .accessibilityLabel("モデル")
 
-            if selectedModelOption == .custom {
+            if provider == .other {
+                TextField("OpenAI互換APIのURL", text: $endpoint)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focusedAPIField, equals: .endpoint)
+            } else {
+                LabeledContent("エンドポイント", value: endpoint)
+            }
+
+            if provider == .openAI {
+                Picker("モデル", selection: $selectedModelOption) {
+                    ForEach(ModelOption.allCases) { option in
+                        Text(option.pickerLabel).tag(option)
+                    }
+                }
+                .onChange(of: selectedModelOption) { _, newValue in
+                    if let modelID = newValue.modelID {
+                        model = modelID
+                    } else if ModelOption.selection(for: model) != .custom {
+                        model = ""
+                    }
+                }
+                .accessibilityLabel("モデル")
+            } else if provider == .google {
+                Picker("モデル", selection: $selectedGeminiModel) {
+                    ForEach(GeminiModelOption.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+                .onChange(of: selectedGeminiModel) { _, selection in
+                    model = selection.rawValue
+                }
+                .accessibilityLabel("モデル")
+            }
+
+            if provider == .other || (provider == .openAI && selectedModelOption == .custom) {
                 TextField("モデル名を入力", text: $model)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -164,7 +193,8 @@ private struct ContentView: View {
             }
 
             SecureField(
-                hasStoredAPIKey ? "APIキー（保存済み）" : "APIキー",
+                hasStoredAPIKey ? "\(provider.displayName)のAPIキー（保存済み）"
+                    : "\(provider.displayName)のAPIキー",
                 text: $apiKey
             )
             .textInputAutocapitalization(.never)
@@ -183,6 +213,7 @@ private struct ContentView: View {
             }
             .disabled(
                 !hasUnsavedAPISettings
+                    || endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             )
 
@@ -200,7 +231,7 @@ private struct ContentView: View {
         } header: {
             Text("API設定")
         } footer: {
-            Text("その他のOpenAI互換モデルは自由入力を選んでください。エンドポイントとモデルはApp Group、APIキーは共有Keychainへ保存します。")
+            Text("Googleでは精度重視と速度・費用重視の2モデルから選べます。接続先とモデルはApp Group、接続先別のAPIキーは共有Keychainへ保存します。")
         }
     }
 
@@ -265,7 +296,7 @@ private struct ContentView: View {
                 ForEach(usageStatistics) { statistics in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(statistics.model)
+                            Text("\(statistics.provider.displayName) · \(statistics.model)")
                                 .font(.headline)
                                 .textSelection(.enabled)
                             Spacer()
@@ -290,6 +321,9 @@ private struct ContentView: View {
                                 )
                             }
                             LabeledContent("出力トークン", value: statistics.outputTokens.formatted())
+                            if statistics.unitemizedTokens > 0 {
+                                LabeledContent("内訳不明のトークン", value: statistics.unitemizedTokens.formatted())
+                            }
                             LabeledContent("合計トークン", value: statistics.totalTokens.formatted())
                             LabeledContent("概算料金") {
                                 Text(estimatedCostDisplay(for: statistics))
@@ -308,7 +342,7 @@ private struct ContentView: View {
         } header: {
             Text("利用状況")
         } footer: {
-            Text("APIレスポンスのトークン数を端末内に記録します。料金はOpenAIのStandard料金（短いコンテキスト）による概算です。料金表にないモデルは不明と表示します。")
+            Text("APIレスポンスのトークン数を端末内に記録します。料金はOpenAIまたはGoogleの有料Standard料金による概算です。無料枠や実際の請求額とは異なります。その他・料金表にないモデルは不明と表示します。")
         }
     }
 
@@ -482,6 +516,7 @@ private struct ContentView: View {
         }
         return endpoint.trimmingCharacters(in: .whitespacesAndNewlines) != savedEndpoint
             || model.trimmingCharacters(in: .whitespacesAndNewlines) != savedModel
+            || provider != savedProvider
             || !apiKey.isEmpty
     }
 
@@ -522,13 +557,16 @@ private struct ContentView: View {
     private func loadSettings() {
         if let store = SharedSettingsStore() {
             let configuration = store.loadProviderConfiguration()
+            provider = configuration.provider
             endpoint = configuration.endpoint
             model = configuration.model
             selectedModelOption = ModelOption.selection(for: configuration.model)
+            selectedGeminiModel = GeminiModelOption(rawValue: configuration.model) ?? .quality
             savedEndpoint = configuration.endpoint
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             savedModel = configuration.model
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            savedProvider = configuration.provider
             hapticFeedbackEnabled = store.loadHapticFeedbackEnabled()
             conversionCompletionHapticEnabled = store.loadConversionCompletionHapticEnabled()
             keyClickSoundEnabled = store.loadKeyClickSoundEnabled()
@@ -538,15 +576,32 @@ private struct ContentView: View {
             conversionPromptConfiguration = store.loadConversionPromptConfiguration()
             hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)
         }
+        refreshStoredAPIKey(for: endpoint)
+        hasLoadedSettings = true
+    }
+
+    private func refreshStoredAPIKey(for endpoint: String) {
         do {
-            let storedAPIKey = try APIKeyStore().load()
+            let storedAPIKey = try APIKeyStore().load(for: endpoint)
             hasStoredAPIKey = storedAPIKey != nil
             storedAPIKeyDisplay = storedAPIKey.flatMap(APIKeyStore.maskedDisplay)
         } catch {
             hasStoredAPIKey = false
             storedAPIKeyDisplay = nil
         }
-        hasLoadedSettings = true
+    }
+
+    private func selectProvider(_ selection: AIProvider) {
+        guard selection != provider else { return }
+        let configuration = SharedSettingsStore()?.loadProviderConfiguration(for: selection)
+        provider = selection
+        endpoint = configuration?.endpoint ?? selection.defaultEndpoint
+        model = configuration?.model ?? (selection == .openAI ? ProviderConfiguration.defaultModel
+            : selection == .google ? ProviderConfiguration.defaultGoogleModel : "")
+        selectedModelOption = ModelOption.selection(for: model)
+        selectedGeminiModel = GeminiModelOption(rawValue: model) ?? .quality
+        apiKey = ""
+        refreshStoredAPIKey(for: endpoint)
     }
 
     private func saveSettings() {
@@ -556,21 +611,26 @@ private struct ContentView: View {
         }
 
         do {
+            // The old single key belongs to the saved endpoint, never to a newly selected provider.
+            try APIKeyStore().migrateLegacyKey(for: savedEndpoint)
+            let normalizedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !apiKey.isEmpty {
+                try APIKeyStore().save(apiKey, for: normalizedEndpoint)
+            }
             try store.saveProviderConfiguration(
                 ProviderConfiguration(
-                    endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-                    model: model.trimmingCharacters(in: .whitespacesAndNewlines)
+                    endpoint: normalizedEndpoint,
+                    model: model.trimmingCharacters(in: .whitespacesAndNewlines),
+                    provider: provider
                 )
             )
             if !apiKey.isEmpty {
-                let maskedDisplay = APIKeyStore.maskedDisplay(for: apiKey)
-                try APIKeyStore().save(apiKey)
                 apiKey = ""
-                hasStoredAPIKey = true
-                storedAPIKeyDisplay = maskedDisplay
             }
+            refreshStoredAPIKey(for: normalizedEndpoint)
             savedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
             savedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            savedProvider = provider
             statusMessage = "設定を保存しました。"
         } catch {
             statusMessage = "設定を保存できませんでした。"
@@ -579,7 +639,7 @@ private struct ContentView: View {
 
     private func deleteAPIKey() {
         do {
-            try APIKeyStore().delete()
+            try APIKeyStore().delete(for: endpoint)
             apiKey = ""
             hasStoredAPIKey = false
             storedAPIKeyDisplay = nil
@@ -608,7 +668,7 @@ private struct ContentView: View {
         defer { isTesting = false }
 
         do {
-            let storedAPIKey = try APIKeyStore().load()
+            let storedAPIKey = try APIKeyStore().load(for: normalizedEndpoint)
             let client = OpenAICompatibleClient(
                 configuration: OpenAICompatibleConfiguration(
                     endpoint: endpointURL,
@@ -626,7 +686,8 @@ private struct ContentView: View {
             if let usage = response.usage {
                 SharedSettingsStore()?.recordUsage(
                     usage,
-                    model: response.model ?? normalizedModel
+                    model: response.model ?? normalizedModel,
+                    provider: provider
                 )
                 loadUsageStatistics()
             }
@@ -1031,7 +1092,7 @@ private struct ConversionPromptPresetEditor: View {
         defer { isTesting = false }
 
         do {
-            let apiKey = try APIKeyStore().load()
+            let apiKey = try APIKeyStore().load(for: configuration.endpoint)
             let client = OpenAICompatibleClient(
                 configuration: OpenAICompatibleConfiguration(
                     endpoint: endpointURL,
@@ -1054,10 +1115,12 @@ private struct ConversionPromptPresetEditor: View {
             resultWithoutPrompt = baselineResponse.candidates.first ?? "候補がありません。"
             resultWithPrompt = customizedResponse.candidates.first ?? "候補がありません。"
             if let usage = baselineResponse.usage {
-                store.recordUsage(usage, model: baselineResponse.model ?? configuration.model)
+                store.recordUsage(usage, model: baselineResponse.model ?? configuration.model,
+                                  provider: configuration.provider)
             }
             if let usage = customizedResponse.usage {
-                store.recordUsage(usage, model: customizedResponse.model ?? configuration.model)
+                store.recordUsage(usage, model: customizedResponse.model ?? configuration.model,
+                                  provider: configuration.provider)
             }
         } catch {
             testMessage = "比較に失敗しました。API設定や通信状態を確認してください。"

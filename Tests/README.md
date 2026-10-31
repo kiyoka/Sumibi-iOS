@@ -31,6 +31,8 @@ swift Tools/build_dictionary_preview.swift /path/to/Build/Products/Debug-iphones
 
 ## 既存の設定チャット
 
+Issue #135では、旧OpenAI／カスタム接続先の設定と利用統計の移行、接続先ごとのモデル・統計の分離、Gemini 3.6 Flash／3.5 Flash-Liteの推論設定、Google互換APIのURL・認証・使用量の読み取りと概算料金をモックテストで確認します。実際のGemini APIキーを使う疎通・変換品質確認は実機で別途行います。
+
 キークリック音の分類・OFF／フォールバック・WAV品質・再生成一致の確認は、[キークリック音仕様](../docs/KEY_CLICK_SOUNDS_JA.md)に手順があります。実際の音量・消音・打鍵感の確認は実機で別途行います。
 
 API通信をモックし、設定案の検証・一括適用・古い設定案の拒否・旧版の利用統計・送信内容・既存の変換処理を確認します。実APIや実APIキーは使いません。

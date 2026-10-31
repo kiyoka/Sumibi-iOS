@@ -35,6 +35,7 @@ public struct OpenAICompatibleClient: ConversionClient {
         let messages: [Message]
         let reasoningEffort: String?
         let verbosity: String?
+        let temperature: Double?
         var responseFormat: SettingsChatOutputFormat? = nil
 
         private enum CodingKeys: String, CodingKey {
@@ -42,6 +43,7 @@ public struct OpenAICompatibleClient: ConversionClient {
             case messages
             case reasoningEffort = "reasoning_effort"
             case verbosity
+            case temperature
             case responseFormat = "response_format"
         }
     }
@@ -60,11 +62,13 @@ public struct OpenAICompatibleClient: ConversionClient {
     private struct Usage: Decodable {
         let promptTokens: Int
         let completionTokens: Int
+        let totalTokens: Int?
         let promptTokensDetails: PromptTokensDetails?
 
         private enum CodingKeys: String, CodingKey {
             case promptTokens = "prompt_tokens"
             case completionTokens = "completion_tokens"
+            case totalTokens = "total_tokens"
             case promptTokensDetails = "prompt_tokens_details"
         }
     }
@@ -146,7 +150,9 @@ public struct OpenAICompatibleClient: ConversionClient {
             TokenUsage(
                 inputTokens: $0.promptTokens,
                 cachedInputTokens: $0.promptTokensDetails?.cachedTokens ?? 0,
-                outputTokens: $0.completionTokens
+                outputTokens: $0.completionTokens,
+                unitemizedTokens: max(0, ($0.totalTokens ?? ($0.promptTokens + $0.completionTokens))
+                    - $0.promptTokens - $0.completionTokens)
             )
         }
         return ConversionResponse(
@@ -172,7 +178,7 @@ public struct OpenAICompatibleClient: ConversionClient {
         許可された設定は以下の4項目だけです。valueは常に文字列です。
         model: モデルID。アプリのモデル選択肢と補足は、後述のmodelChoicesを参照してください。
         「使えるモデルの一覧」「どんなモデルを選べる？」などの質問には、modelChoicesにある全選択肢の名前、モデルID、補足を箇条書きで案内し、changesは空にしてください。
-        自由入力では、設定したAPIが対応するモデルIDを指定できます。これはアプリの選択肢であり、API側の利用可能モデル一覧を取得したものではありません。契約・APIキーの権限・送信先によって利用可否が異なり、この会話では確認していない旨を添えてください。送信先がOpenAI以外でも、アプリの選択肢をそのサービスで利用できると保証しないでください。
+        Google接続先のモデル変更は、modelChoicesに示す2モデルだけを提案してください。OpenAI／その他の自由入力では、設定したAPIが対応するモデルIDを指定できます。これはアプリの選択肢であり、API側の利用可能モデル一覧を取得したものではありません。契約・APIキーの権限・送信先によって利用可否が異なり、この会話では確認していない旨を添えてください。
         GPT-5.6 Terraなど具体的に指定されたモデルIDも自由入力として尊重してください。参照情報にない単価・性能の数値や利用可否を推測で断定しないでください。
         hapticFeedbackEnabled: キー入力時の振動。valueは"true"または"false"。
         conversionCompletionHapticEnabled: 変換完了時の振動。valueは"true"または"false"。
@@ -188,7 +194,7 @@ public struct OpenAICompatibleClient: ConversionClient {
         質問、使い方の説明、現在の費用、未来の見積もりではchangesを空にしてください。節約の相談だけで勝手にモデルを変更せず、明確に変更を依頼された場合だけ提案してください。
         現在の費用はusage_contextのモデル別estimatedCostUSDとknownCostSubtotalUSDを参照してください。金額はUSDの概算であり、実際の請求・残高でも他アプリや他端末を含む費用でもありません。今回の回答自体の費用は未計上です。質問に合わせてモデル別・小計を示し、集計開始と取得時点を短く添えてください。
         estimatedCostUSDがnullのモデルは料金不明であり、0 USDや無料ではありません。modelsWithUnknownCostが空でなければ小計を総額と呼ばず、未算入のモデルを明示してください。
-        費用はアプリ内の既存料金表（OpenAIのStandard料金）による概算です。料金改定や互換APIの独自料金は反映されていない可能性があります。予測可能なモデルと不明なモデルが混在すれば、可能な部分だけの見積もりだと明示して答えてください。
+        費用はアプリ内の既存料金表（OpenAIまたはGoogleの有料Standard料金）による概算です。無料枠、料金改定や互換APIの独自料金は反映されていない可能性があります。予測可能なモデルと不明なモデルが混在すれば、可能な部分だけの見積もりだと明示して答えてください。
         未来の見積もりはあなた自身が統計から計算してください。「15日」「30日」「1週間」「この2倍使ったら」など質問の期間・倍率と会話の続きを理解し、固定30日の回答にしないでください。過去の回答に含まれる費用より、今回渡されたusage_contextの最新統計を優先してください。
         「このまま」は記録された平均利用ペースとモデル構成が続く仮定です。capturedAtと各モデルのcollectionStartedAtから、そのモデルの経過日数を解釈し、概算費用 / 経過日数 * 質問された日数 * 指定倍率を目安に計算・合算してください。日数は24時間を1日とし、モデルごとに開始が異なることを考慮してください。
         今後の追加費用と、現在までを含む累計を区別し、計算に使った期間・平均ペース・前提を簡潔に説明してください。累積統計しかないので直近の日別傾向や特定日の費用、実際の将来請求を分かったように述べないでください。
@@ -222,8 +228,11 @@ public struct OpenAICompatibleClient: ConversionClient {
         \(usage)
         </usage_context>
         """
-        let usesSchema = configuration.endpoint.host?.lowercased() == "api.openai.com"
-            && ["gpt-6-sol", "gpt-6-luna"].contains(configuration.model)
+        let host = configuration.endpoint.host?.lowercased()
+        let usesSchema = (host == "api.openai.com"
+            && ["gpt-6-sol", "gpt-6-luna"].contains(configuration.model))
+            || (host == "generativelanguage.googleapis.com"
+                && GeminiModelOption(rawValue: configuration.model) != nil)
         let response = try await requestChat(
             messages: [Message(role: "system", content: instructions)]
                 + messages.map { Message(role: $0.role.rawValue, content: $0.content) },
@@ -240,7 +249,9 @@ public struct OpenAICompatibleClient: ConversionClient {
                 TokenUsage(
                     inputTokens: $0.promptTokens,
                     cachedInputTokens: $0.promptTokensDetails?.cachedTokens ?? 0,
-                    outputTokens: $0.completionTokens
+                    outputTokens: $0.completionTokens,
+                    unitemizedTokens: max(0, ($0.totalTokens ?? ($0.promptTokens + $0.completionTokens))
+                        - $0.promptTokens - $0.completionTokens)
                 )
             }
         )
@@ -267,6 +278,7 @@ public struct OpenAICompatibleClient: ConversionClient {
             messages: messages,
             reasoningEffort: options.reasoningEffort,
             verbosity: options.verbosity,
+            temperature: options.temperature,
             responseFormat: responseFormat
         ))
         let (data, response) = try await session.data(for: request)
@@ -279,22 +291,33 @@ public struct OpenAICompatibleClient: ConversionClient {
 
     private func chatRequestOptions(for model: String) -> (
         reasoningEffort: String?,
-        verbosity: String?
+        verbosity: String?,
+        temperature: Double?
     ) {
         let normalizedModel = model
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+        if configuration.endpoint.host?.lowercased() == "generativelanguage.googleapis.com" {
+            switch normalizedModel {
+            case GeminiModelOption.quality.rawValue:
+                return (reasoningEffort: "minimal", verbosity: nil, temperature: 1)
+            case GeminiModelOption.economy.rawValue:
+                return (reasoningEffort: "minimal", verbosity: nil, temperature: nil)
+            default:
+                return (reasoningEffort: nil, verbosity: nil, temperature: nil)
+            }
+        }
 
         if normalizedModel == "gpt-6-sol"
             || normalizedModel == "gpt-6-luna" {
-            return (reasoningEffort: "none", verbosity: "low")
+            return (reasoningEffort: "none", verbosity: "low", temperature: nil)
         }
 
         if normalizedModel == "gpt-5.6-terra" {
-            return (reasoningEffort: "none", verbosity: nil)
+            return (reasoningEffort: "none", verbosity: nil, temperature: nil)
         }
 
-        return (reasoningEffort: nil, verbosity: nil)
+        return (reasoningEffort: nil, verbosity: nil, temperature: nil)
     }
 
     private func userDictionaryInstructions(for request: ConversionRequest) -> String {
@@ -384,6 +407,11 @@ public struct OpenAICompatibleClient: ConversionClient {
         let normalizedPath = baseURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if normalizedPath.hasSuffix("chat/completions") {
             return baseURL
+        }
+        if normalizedPath.hasSuffix("v1beta/openai") {
+            return baseURL
+                .appendingPathComponent("chat")
+                .appendingPathComponent("completions")
         }
         if normalizedPath.hasSuffix("v1") {
             return baseURL

@@ -9,7 +9,7 @@ public enum APIKeyStoreError: Error, Equatable {
 
 public struct APIKeyStore {
     private static let service = "org.sumibi.Sumibi-iOS.api-key"
-    private static let account = "default"
+    private static let legacyAccount = "default"
 
     public init() {}
 
@@ -26,8 +26,25 @@ public struct APIKeyStore {
         return maskedPrefix + suffix
     }
 
-    public func load() throws -> String? {
-        var query = baseQuery
+    public func load(for endpoint: String) throws -> String? {
+        let account = Self.account(for: endpoint)
+        if let key = try load(account: account) { return key }
+        // Upgrade the pre-provider key only for the endpoint that owned it.
+        guard SharedSettingsStore()?.loadProviderConfiguration().endpoint
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            == endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+              let legacyKey = try load(account: Self.legacyAccount) else { return nil }
+        try save(legacyKey, account: account)
+        try delete(account: Self.legacyAccount)
+        return legacyKey
+    }
+
+    public func migrateLegacyKey(for endpoint: String) throws {
+        _ = try load(for: endpoint)
+    }
+
+    private func load(account: String) throws -> String? {
+        var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -49,7 +66,11 @@ public struct APIKeyStore {
         return apiKey
     }
 
-    public func save(_ apiKey: String) throws {
+    public func save(_ apiKey: String, for endpoint: String) throws {
+        try save(apiKey, account: Self.account(for: endpoint))
+    }
+
+    private func save(_ apiKey: String, account: String) throws {
         guard let data = apiKey.data(using: .utf8) else {
             throw APIKeyStoreError.invalidEncoding
         }
@@ -61,7 +82,7 @@ public struct APIKeyStore {
         ]
 
         let updateStatus = SecItemUpdate(
-            baseQuery as CFDictionary,
+            baseQuery(account: account) as CFDictionary,
             attributes as CFDictionary
         )
 
@@ -72,7 +93,7 @@ public struct APIKeyStore {
             throw APIKeyStoreError.keychain(updateStatus)
         }
 
-        var item = baseQuery
+        var item = baseQuery(account: account)
         attributes.forEach { item[$0.key] = $0.value }
         let addStatus = SecItemAdd(item as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
@@ -80,18 +101,26 @@ public struct APIKeyStore {
         }
     }
 
-    public func delete() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
+    public func delete(for endpoint: String) throws {
+        try delete(account: Self.account(for: endpoint))
+    }
+
+    private func delete(account: String) throws {
+        let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw APIKeyStoreError.keychain(status)
         }
     }
 
-    private var baseQuery: [String: Any] {
+    private static func account(for endpoint: String) -> String {
+        "endpoint:\(endpoint.trimmingCharacters(in: .whitespacesAndNewlines))"
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: Self.account,
+            kSecAttrAccount as String: account,
             kSecAttrAccessGroup as String: SharedSettingsStore.appGroupIdentifier,
             kSecAttrSynchronizable as String: false,
         ]

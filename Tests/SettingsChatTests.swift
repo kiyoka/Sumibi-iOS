@@ -40,8 +40,10 @@ private struct SettingsChatTests {
         testGameSettings(store, defaults)
         try testProposals(store)
         try testLegacyUsage(store, defaults)
+        try testProviders(store, defaults)
         try testUsageContext(store)
         try await testTransport(store)
+        try await testGoogleTransport(store)
         try await testConsultationTransport(store)
         print("Chat checks passed: settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
     }
@@ -181,6 +183,161 @@ private struct SettingsChatTests {
         let reset = store.loadUsageStatistics().first!
         expect(reset.conversionCount == 0 && reset.settingsChatCount == 0 && reset.totalTokens == 0,
                "Usage reset did not include chat")
+    }
+
+    static func testProviders(_ store: SharedSettingsStore, _ defaults: UserDefaults) throws {
+        expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.quality.rawValue,
+               "Google did not default to the quality model")
+        defaults.set(Data(#"{"endpoint":"https://api.openai.com","model":"gpt-5.6-terra"}"#.utf8),
+                     forKey: "providerConfiguration")
+        let oldOpenAI = store.loadProviderConfiguration()
+        expect(oldOpenAI.provider == .openAI && oldOpenAI.model == "gpt-5.6-terra",
+               "Legacy OpenAI configuration changed during upgrade")
+        defaults.set(Data(#"{"endpoint":"https://compatible.example/v1","model":"custom"}"#.utf8),
+                     forKey: "providerConfiguration")
+        expect(store.loadProviderConfiguration().provider == .other,
+               "Legacy custom endpoint became OpenAI")
+        defaults.set(Data(#"{"endpoint":"https://generativelanguage.googleapis.com/v1beta/openai","model":"gemini-3.6-flash"}"#.utf8),
+                     forKey: "providerConfiguration")
+        expect(store.loadProviderConfiguration().provider == .google,
+               "Legacy Google-compatible endpoint lost its provider")
+        defaults.set(Data(#"{"endpoint":"https://compatible.example/v1","model":"custom"}"#.utf8),
+                     forKey: "providerConfiguration")
+        defaults.set(Data("""
+        [{"model":"custom","conversionCount":1,"inputTokens":2,"cachedInputTokens":0,"outputTokens":1}]
+        """.utf8), forKey: "usageStatistics")
+        expect(store.loadUsageStatistics().first?.provider == .other,
+               "Legacy custom-endpoint usage was attributed to OpenAI")
+        try store.saveProviderConfiguration(oldOpenAI)
+        expect(store.loadUsageStatistics().first?.provider == .other,
+               "Switching providers reattributed legacy usage")
+        try store.saveProviderConfiguration(ProviderConfiguration(
+            endpoint: AIProvider.google.defaultEndpoint,
+            model: GeminiModelOption.quality.rawValue, provider: .google
+        ))
+        expect(store.loadProviderConfiguration(for: .openAI).model == "gpt-5.6-terra",
+               "Switching provider lost the previous model")
+        expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.quality.rawValue,
+               "Google model was not retained")
+        try store.saveProviderConfiguration(oldOpenAI)
+        defaults.removeObject(forKey: "usageStatistics")
+
+        store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
+                          model: GeminiModelOption.quality.rawValue, provider: .google)
+        store.recordUsage(TokenUsage(inputTokens: 10, outputTokens: 10),
+                          model: GeminiModelOption.quality.rawValue, provider: .other)
+        let rows = store.loadUsageStatistics()
+        let google = rows.first { $0.provider == .google }!
+        let other = rows.first { $0.provider == .other }!
+        expect(google.estimatedCostUSD == Decimal(string: "4.5"), "Google paid rate incorrect")
+        expect(other.estimatedCostUSD == nil, "Unknown provider inherited Google's price")
+        expect(google.id != other.id, "Provider and model usage were merged")
+        store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
+                          model: GeminiModelOption.economy.rawValue, provider: .google)
+        expect(store.loadUsageStatistics().first { $0.model == GeminiModelOption.economy.rawValue }?
+               .estimatedCostUSD == Decimal(string: "2.8"), "Flash-Lite paid rate incorrect")
+        let beforePriceChange = ISO8601DateFormatter().date(from: "2026-12-31T23:00:00Z")!
+        let afterPriceChange = ISO8601DateFormatter().date(from: "2027-01-01T01:00:00Z")!
+        store.resetUsageStatistics()
+        store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
+                          model: GeminiModelOption.quality.rawValue, provider: .google,
+                          at: beforePriceChange)
+        store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
+                          model: GeminiModelOption.quality.rawValue, provider: .google,
+                          at: afterPriceChange)
+        expect(store.loadUsageStatistics().first { $0.provider == .google && $0.model == GeminiModelOption.quality.rawValue }?
+               .estimatedCostUSD == Decimal(string: "13.5"),
+               "Google history was repriced after introductory pricing ended")
+        store.recordUsage(TokenUsage(inputTokens: 20, outputTokens: 5, unitemizedTokens: 3),
+                          model: GeminiModelOption.quality.rawValue, provider: .google)
+        let ambiguous = store.loadUsageStatistics().first {
+            $0.provider == .google && $0.model == GeminiModelOption.quality.rawValue
+        }
+        expect(ambiguous?.unitemizedTokens == 3 && ambiguous?.estimatedCostUSD == nil,
+               "Unitemized Google usage was silently priced")
+        let googleSnapshot = SettingsChatSnapshot(
+            provider: ProviderConfiguration(endpoint: AIProvider.google.defaultEndpoint,
+                                            model: GeminiModelOption.quality.rawValue, provider: .google),
+            hapticFeedbackEnabled: true, conversionCompletionHapticEnabled: true,
+            keyClickSoundEnabled: true
+        )
+        let modelContext = try googleSnapshot.contextJSON()
+        expect(modelContext.contains(GeminiModelOption.quality.rawValue)
+               && modelContext.contains(GeminiModelOption.economy.rawValue)
+               && !modelContext.contains("gemini-3.8-flash"), "Google chat choices differ from picker")
+        do {
+            _ = try googleSnapshot.applying([SettingsChatChange(setting: .model, value: "gemini-3.8-flash")])
+            preconditionFailure("Google chat accepted a model outside the two choices")
+        } catch SettingsChatError.invalidProposal {}
+        store.resetUsageStatistics()
+    }
+
+    static func testGoogleTransport(_ store: SharedSettingsStore) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockChatProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        for option in GeminiModelOption.allCases {
+            let client = OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
+                endpoint: URL(string: AIProvider.google.defaultEndpoint)!,
+                model: option.rawValue, apiKey: "GOOGLE_TEST_KEY"
+            ), session: session)
+            MockChatProtocol.handler = { request in
+                expect(request.url?.absoluteString ==
+                       "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                       "Google OpenAI-compatible path is wrong")
+                expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer GOOGLE_TEST_KEY",
+                       "Google key was not sent as Bearer token")
+                let body = try JSONSerialization.jsonObject(with: requestBody(request)) as! [String: Any]
+                expect(body["model"] as? String == option.rawValue, "Google model was changed")
+                expect(body["verbosity"] == nil && body["reasoning_effort"] as? String == "minimal",
+                       "Google thinking settings are wrong")
+                expect((body["temperature"] as? Double) == (option == .quality ? 1 : nil),
+                       "Google temperature settings are wrong")
+                let messages = body["messages"] as? [[String: String]] ?? []
+                let prompt = messages.first?["content"] ?? ""
+                if prompt.contains("# 役割") {
+                    let format = body["response_format"] as? [String: Any]
+                    expect(format?["type"] as? String == "json_schema",
+                           "Gemini settings chat did not request structured JSON")
+                } else {
+                    expect(body["response_format"] == nil,
+                           "Gemini conversion unexpectedly requested the chat schema")
+                }
+                let answer = prompt.contains("# 役割")
+                    ? #"{"reply":"Googleで利用できます","changes":[]}"#
+                    : prompt.contains("最大12件")
+                        ? #"{"candidates":["橋","箸","端"]}"#
+                        : #"{"candidates":["日本語"]}"#
+                return try JSONSerialization.data(withJSONObject: [
+                    "model": option.rawValue,
+                    "choices": [["message": ["role": "assistant", "content": answer]]],
+                    "usage": ["prompt_tokens": 20, "completion_tokens": 5,
+                              "total_tokens": option == .economy ? 28 : 25,
+                              "prompt_tokens_details": ["cached_tokens": 4]],
+                ])
+            }
+            let result = try await client.convert(ConversionRequest(source: "nihongo"))
+            expect(result.candidates == ["日本語"], "Google-compatible conversion failed")
+            expect(result.usage?.inputTokens == 20 && result.usage?.cachedInputTokens == 4
+                   && result.usage?.outputTokens == 5, "Google-compatible usage was not decoded")
+            expect(result.usage?.unitemizedTokens == (option == .economy ? 3 : 0),
+                   "Unitemized Google tokens were discarded")
+            let additional = try await client.convert(ConversionRequest(source: "hashi", mode: .additional))
+            expect(additional.candidates == ["橋", "箸", "端"], "Google additional candidates failed")
+            let snapshot = SettingsChatSnapshot(
+                provider: ProviderConfiguration(endpoint: AIProvider.google.defaultEndpoint,
+                                                model: option.rawValue, provider: .google),
+                hapticFeedbackEnabled: true, conversionCompletionHapticEnabled: true,
+                keyClickSoundEnabled: true
+            )
+            let chat = try await client.chatForSettings(
+                messages: [SettingsChatMessage(role: .user, content: "使い方は？")], snapshot: snapshot
+            )
+            let payload = try SettingsChatPayload.decode(chat.content)
+            expect(payload.reply == "Googleで利用できます" && payload.changes.isEmpty,
+                   "Google settings chat failed")
+        }
     }
 
     static func testTransport(_ store: SharedSettingsStore) async throws {
