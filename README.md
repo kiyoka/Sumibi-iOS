@@ -36,7 +36,7 @@ Emacs版の [Sumibi](https://github.com/kiyoka/Sumibi) が持つ「モードレ�
 
 1. Xcodeで `Sumibi-iOS.xcodeproj` を開きます。
 2. `SumibiApp` をビルド・実行します。
-3. アプリ内で接続先・モデル・APIキーを設定します。Googleでは「精度重視：Gemini 3.6 Flash」と「速度・費用重視：Gemini 3.5 Flash-Lite」から選べます。
+3. アプリ内で接続先・モデル・APIキーを設定します。Googleでは「精度重視：Gemini 4 Argon（有料枠のみ）」と「速度・費用重視：Gemini 3.6 Flash」から選べます。
 4. 設定アプリの「キーボード」からSumibiキーボードを追加し、「フルアクセスを許可」を有効にします。
 5. 任意のアプリでSumibiキーボードに切り替え、ローマ字や英語を入力してから変換キーを押すと日本語に変換されます。
 

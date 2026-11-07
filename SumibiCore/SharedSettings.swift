@@ -58,14 +58,18 @@ public enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
 }
 
 public enum GeminiModelOption: String, CaseIterable, Identifiable, Sendable {
-    case quality = "gemini-3.6-flash"
-    case economy = "gemini-3.5-flash-lite"
+    case quality = "gemini-4-argon"
+    case economy = "gemini-3.6-flash"
+    case legacyFlashLite = "gemini-3.5-flash-lite"
+
+    public static let recommendedCases: [Self] = [.quality, .economy]
 
     public var id: Self { self }
     public var displayName: String {
         switch self {
-        case .quality: "精度重視：Gemini 3.6 Flash"
-        case .economy: "速度・費用重視：Gemini 3.5 Flash-Lite"
+        case .quality: "精度重視：Gemini 4 Argon（有料枠のみ）"
+        case .economy: "速度・費用重視：Gemini 3.6 Flash"
+        case .legacyFlashLite: "Gemini 3.5 Flash-Lite（以前の設定）"
         }
     }
 }
@@ -73,7 +77,7 @@ public enum GeminiModelOption: String, CaseIterable, Identifiable, Sendable {
 public struct ProviderConfiguration: Codable, Equatable, Sendable {
     public static let defaultEndpoint = "https://api.openai.com"
     public static let defaultModel = "gpt-6-sol"
-    public static let defaultGoogleModel = GeminiModelOption.quality.rawValue
+    public static let defaultGoogleModel = GeminiModelOption.economy.rawValue
 
     public var endpoint: String
     public var model: String
@@ -573,15 +577,21 @@ private struct ModelPricing {
     static func pricing(for model: String, provider: AIProvider, at date: Date = Date()) -> ModelPricing? {
         let normalized = model.lowercased()
         if provider == .google {
-            // Google Gemini API paid-tier Standard text pricing, checked 2026-10-31.
+            // Google Gemini API paid-tier Standard text pricing, checked 2026-11-07.
             // https://ai.google.dev/gemini-api/docs/pricing
             if normalized == GeminiModelOption.quality.rawValue {
+                let introductory = date < ISO8601DateFormatter().date(from: "2026-12-01T00:00:00Z")!
+                return introductory
+                    ? ModelPricing(input: 2, cachedInput: 0.1, output: 10)
+                    : ModelPricing(input: 4, cachedInput: 0.2, output: 20)
+            }
+            if normalized == GeminiModelOption.economy.rawValue {
                 let introductory = date < ISO8601DateFormatter().date(from: "2027-01-01T00:00:00Z")!
                 return introductory
                     ? ModelPricing(input: 0.75, cachedInput: 0.075, output: 3.75)
                     : ModelPricing(input: 1.5, cachedInput: 0.15, output: 7.5)
             }
-            if normalized == GeminiModelOption.economy.rawValue {
+            if normalized == GeminiModelOption.legacyFlashLite.rawValue {
                 return ModelPricing(input: 0.3, cachedInput: 0.03, output: 2.5)
             }
             return nil

@@ -186,8 +186,8 @@ private struct SettingsChatTests {
     }
 
     static func testProviders(_ store: SharedSettingsStore, _ defaults: UserDefaults) throws {
-        expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.quality.rawValue,
-               "Google did not default to the quality model")
+        expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.economy.rawValue,
+               "Google did not default to the affordable model")
         defaults.set(Data(#"{"endpoint":"https://api.openai.com","model":"gpt-5.6-terra"}"#.utf8),
                      forKey: "providerConfiguration")
         let oldOpenAI = store.loadProviderConfiguration()
@@ -219,25 +219,38 @@ private struct SettingsChatTests {
                "Switching provider lost the previous model")
         expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.quality.rawValue,
                "Google model was not retained")
+        try store.saveProviderConfiguration(ProviderConfiguration(
+            endpoint: AIProvider.google.defaultEndpoint,
+            model: GeminiModelOption.legacyFlashLite.rawValue, provider: .google
+        ))
+        expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.legacyFlashLite.rawValue,
+               "Existing Flash-Lite selection was silently changed")
         try store.saveProviderConfiguration(oldOpenAI)
         defaults.removeObject(forKey: "usageStatistics")
 
+        let introductoryDate = ISO8601DateFormatter().date(from: "2026-11-07T00:00:00Z")!
         store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
-                          model: GeminiModelOption.quality.rawValue, provider: .google)
+                          model: GeminiModelOption.quality.rawValue, provider: .google,
+                          at: introductoryDate)
         store.recordUsage(TokenUsage(inputTokens: 10, outputTokens: 10),
                           model: GeminiModelOption.quality.rawValue, provider: .other)
         let rows = store.loadUsageStatistics()
         let google = rows.first { $0.provider == .google }!
         let other = rows.first { $0.provider == .other }!
-        expect(google.estimatedCostUSD == Decimal(string: "4.5"), "Google paid rate incorrect")
+        expect(google.estimatedCostUSD == Decimal(string: "12"), "Argon introductory rate incorrect")
         expect(other.estimatedCostUSD == nil, "Unknown provider inherited Google's price")
         expect(google.id != other.id, "Provider and model usage were merged")
         store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
-                          model: GeminiModelOption.economy.rawValue, provider: .google)
+                          model: GeminiModelOption.economy.rawValue, provider: .google,
+                          at: introductoryDate)
         expect(store.loadUsageStatistics().first { $0.model == GeminiModelOption.economy.rawValue }?
-               .estimatedCostUSD == Decimal(string: "2.8"), "Flash-Lite paid rate incorrect")
-        let beforePriceChange = ISO8601DateFormatter().date(from: "2026-12-31T23:00:00Z")!
-        let afterPriceChange = ISO8601DateFormatter().date(from: "2027-01-01T01:00:00Z")!
+               .estimatedCostUSD == Decimal(string: "4.5"), "Flash paid rate incorrect")
+        store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
+                          model: GeminiModelOption.legacyFlashLite.rawValue, provider: .google)
+        expect(store.loadUsageStatistics().first { $0.model == GeminiModelOption.legacyFlashLite.rawValue }?
+               .estimatedCostUSD == Decimal(string: "2.8"), "Legacy Flash-Lite rate was lost")
+        let beforePriceChange = ISO8601DateFormatter().date(from: "2026-11-30T23:00:00Z")!
+        let afterPriceChange = ISO8601DateFormatter().date(from: "2026-12-01T01:00:00Z")!
         store.resetUsageStatistics()
         store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
                           model: GeminiModelOption.quality.rawValue, provider: .google,
@@ -246,8 +259,13 @@ private struct SettingsChatTests {
                           model: GeminiModelOption.quality.rawValue, provider: .google,
                           at: afterPriceChange)
         expect(store.loadUsageStatistics().first { $0.provider == .google && $0.model == GeminiModelOption.quality.rawValue }?
-               .estimatedCostUSD == Decimal(string: "13.5"),
+               .estimatedCostUSD == Decimal(string: "36"),
                "Google history was repriced after introductory pricing ended")
+        store.recordUsage(TokenUsage(inputTokens: 1_000_000, outputTokens: 1_000_000),
+                          model: GeminiModelOption.economy.rawValue, provider: .google,
+                          at: ISO8601DateFormatter().date(from: "2027-01-01T01:00:00Z")!)
+        expect(store.loadUsageStatistics().first { $0.model == GeminiModelOption.economy.rawValue }?
+               .estimatedCostUSD == Decimal(string: "9"), "Flash standard rate incorrect")
         store.recordUsage(TokenUsage(inputTokens: 20, outputTokens: 5, unitemizedTokens: 3),
                           model: GeminiModelOption.quality.rawValue, provider: .google)
         let ambiguous = store.loadUsageStatistics().first {
@@ -264,7 +282,8 @@ private struct SettingsChatTests {
         let modelContext = try googleSnapshot.contextJSON()
         expect(modelContext.contains(GeminiModelOption.quality.rawValue)
                && modelContext.contains(GeminiModelOption.economy.rawValue)
-               && !modelContext.contains("gemini-3.8-flash"), "Google chat choices differ from picker")
+               && !modelContext.contains(GeminiModelOption.legacyFlashLite.rawValue),
+               "Google chat choices differ from the recommended picker")
         do {
             _ = try googleSnapshot.applying([SettingsChatChange(setting: .model, value: "gemini-3.8-flash")])
             preconditionFailure("Google chat accepted a model outside the two choices")
@@ -290,9 +309,10 @@ private struct SettingsChatTests {
                        "Google key was not sent as Bearer token")
                 let body = try JSONSerialization.jsonObject(with: requestBody(request)) as! [String: Any]
                 expect(body["model"] as? String == option.rawValue, "Google model was changed")
-                expect(body["verbosity"] == nil && body["reasoning_effort"] as? String == "minimal",
+                expect(body["verbosity"] == nil && body["reasoning_effort"] as? String ==
+                       (option == .quality ? "low" : "minimal"),
                        "Google thinking settings are wrong")
-                expect((body["temperature"] as? Double) == (option == .quality ? 1 : nil),
+                expect((body["temperature"] as? Double) == (option == .economy ? 1 : nil),
                        "Google temperature settings are wrong")
                 let messages = body["messages"] as? [[String: String]] ?? []
                 let prompt = messages.first?["content"] ?? ""
