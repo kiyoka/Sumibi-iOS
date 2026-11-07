@@ -67,7 +67,7 @@ public enum GeminiModelOption: String, CaseIterable, Identifiable, Sendable {
     public var id: Self { self }
     public var displayName: String {
         switch self {
-        case .quality: "精度重視：Gemini 4 Argon（有料枠のみ）"
+        case .quality: "精度重視：Gemini 4 Argon"
         case .economy: "速度・費用重視：Gemini 3.6 Flash"
         case .legacyFlashLite: "Gemini 3.5 Flash-Lite（以前の設定）"
         }
