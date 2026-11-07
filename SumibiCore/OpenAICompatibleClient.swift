@@ -300,8 +300,10 @@ public struct OpenAICompatibleClient: ConversionClient {
         if configuration.endpoint.host?.lowercased() == "generativelanguage.googleapis.com" {
             switch normalizedModel {
             case GeminiModelOption.quality.rawValue:
-                return (reasoningEffort: "minimal", verbosity: nil, temperature: 1)
+                return (reasoningEffort: "low", verbosity: nil, temperature: nil)
             case GeminiModelOption.economy.rawValue:
+                return (reasoningEffort: "minimal", verbosity: nil, temperature: 1)
+            case GeminiModelOption.legacyFlashLite.rawValue:
                 return (reasoningEffort: "minimal", verbosity: nil, temperature: nil)
             default:
                 return (reasoningEffort: nil, verbosity: nil, temperature: nil)

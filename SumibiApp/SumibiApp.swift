@@ -26,7 +26,7 @@ private struct ContentView: View {
     @State private var selectedModelOption = ModelOption.selection(
         for: ProviderConfiguration.defaultModel
     )
-    @State private var selectedGeminiModel = GeminiModelOption.quality
+    @State private var selectedGeminiModel = GeminiModelOption.economy
     @State private var apiKey = ""
     @State private var savedEndpoint = ""
     @State private var savedModel = ""
@@ -168,8 +168,12 @@ private struct ContentView: View {
                 .accessibilityLabel("モデル")
             } else if provider == .google {
                 Picker("モデル", selection: $selectedGeminiModel) {
-                    ForEach(GeminiModelOption.allCases) { option in
+                    ForEach(GeminiModelOption.recommendedCases) { option in
                         Text(option.displayName).tag(option)
+                    }
+                    if selectedGeminiModel == .legacyFlashLite {
+                        Text(GeminiModelOption.legacyFlashLite.displayName)
+                            .tag(GeminiModelOption.legacyFlashLite)
                     }
                 }
                 .onChange(of: selectedGeminiModel) { _, selection in
@@ -561,7 +565,7 @@ private struct ContentView: View {
             endpoint = configuration.endpoint
             model = configuration.model
             selectedModelOption = ModelOption.selection(for: configuration.model)
-            selectedGeminiModel = GeminiModelOption(rawValue: configuration.model) ?? .quality
+            selectedGeminiModel = GeminiModelOption(rawValue: configuration.model) ?? .economy
             savedEndpoint = configuration.endpoint
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             savedModel = configuration.model
@@ -599,7 +603,7 @@ private struct ContentView: View {
         model = configuration?.model ?? (selection == .openAI ? ProviderConfiguration.defaultModel
             : selection == .google ? ProviderConfiguration.defaultGoogleModel : "")
         selectedModelOption = ModelOption.selection(for: model)
-        selectedGeminiModel = GeminiModelOption(rawValue: model) ?? .quality
+        selectedGeminiModel = GeminiModelOption(rawValue: model) ?? .economy
         apiKey = ""
         refreshStoredAPIKey(for: endpoint)
     }

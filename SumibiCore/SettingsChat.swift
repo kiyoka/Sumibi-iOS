@@ -71,7 +71,8 @@ public struct SettingsChatSnapshot: Equatable, Sendable {
                       !model.contains(where: { $0.isWhitespace || $0.isNewline })
                 else { throw SettingsChatError.invalidProposal }
                 if result.provider.provider == .google,
-                   GeminiModelOption(rawValue: model) == nil {
+                   !GeminiModelOption.recommendedCases.contains(where: { $0.rawValue == model })
+                   && model != result.provider.model {
                     throw SettingsChatError.invalidProposal
                 }
                 result.provider.model = model
@@ -134,7 +135,7 @@ public struct SettingsChatSnapshot: Equatable, Sendable {
                 ModelChoice(name: $0.displayName, modelID: $0.modelID, summary: $0.summary)
             }
         case .google:
-            modelChoices = GeminiModelOption.allCases.map {
+            modelChoices = GeminiModelOption.recommendedCases.map {
                 ModelChoice(name: $0.displayName, modelID: $0.rawValue, summary: nil)
             }
         case .other:
