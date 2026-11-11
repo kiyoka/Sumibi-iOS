@@ -62,13 +62,17 @@ public enum GeminiModelOption: String, CaseIterable, Identifiable, Sendable {
     case economy = "gemini-3.6-flash"
     case legacyFlashLite = "gemini-3.5-flash-lite"
 
-    public static let recommendedCases: [Self] = [.quality, .economy]
+    public static let recommendedCases: [Self] = [.economy]
+
+    public static func recommendedSelection(for model: String) -> Self? {
+        recommendedCases.first { $0.rawValue == model.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
 
     public var id: Self { self }
     public var displayName: String {
         switch self {
         case .quality: "精度重視：Gemini 4 Argon"
-        case .economy: "速度・費用重視：Gemini 3.6 Flash"
+        case .economy: "Gemini 3.6 Flash（推奨）"
         case .legacyFlashLite: "Gemini 3.5 Flash-Lite（以前の設定）"
         }
     }

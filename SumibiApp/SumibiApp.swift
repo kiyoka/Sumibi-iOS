@@ -26,7 +26,7 @@ private struct ContentView: View {
     @State private var selectedModelOption = ModelOption.selection(
         for: ProviderConfiguration.defaultModel
     )
-    @State private var selectedGeminiModel = GeminiModelOption.economy
+    @State private var selectedGeminiModel: GeminiModelOption? = .economy
     @State private var apiKey = ""
     @State private var savedEndpoint = ""
     @State private var savedModel = ""
@@ -169,20 +169,23 @@ private struct ContentView: View {
             } else if provider == .google {
                 Picker("モデル", selection: $selectedGeminiModel) {
                     ForEach(GeminiModelOption.recommendedCases) { option in
-                        Text(option.displayName).tag(option)
+                        Text(option.displayName).tag(Optional(option))
                     }
-                    if selectedGeminiModel == .legacyFlashLite {
-                        Text(GeminiModelOption.legacyFlashLite.displayName)
-                            .tag(GeminiModelOption.legacyFlashLite)
-                    }
+                    Text("自由入力").tag(nil as GeminiModelOption?)
                 }
                 .onChange(of: selectedGeminiModel) { _, selection in
-                    model = selection.rawValue
+                    if let selection {
+                        model = selection.rawValue
+                    } else if GeminiModelOption.recommendedSelection(for: model) != nil {
+                        // Clear only a previous recommendation; keep loaded custom model IDs.
+                        model = ""
+                    }
                 }
                 .accessibilityLabel("モデル")
             }
 
-            if provider == .other || (provider == .openAI && selectedModelOption == .custom) {
+            if provider == .other || (provider == .openAI && selectedModelOption == .custom)
+                || (provider == .google && selectedGeminiModel == nil) {
                 TextField("モデル名を入力", text: $model)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -565,7 +568,7 @@ private struct ContentView: View {
             endpoint = configuration.endpoint
             model = configuration.model
             selectedModelOption = ModelOption.selection(for: configuration.model)
-            selectedGeminiModel = GeminiModelOption(rawValue: configuration.model) ?? .economy
+            selectedGeminiModel = GeminiModelOption.recommendedSelection(for: configuration.model)
             savedEndpoint = configuration.endpoint
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             savedModel = configuration.model
@@ -603,7 +606,7 @@ private struct ContentView: View {
         model = configuration?.model ?? (selection == .openAI ? ProviderConfiguration.defaultModel
             : selection == .google ? ProviderConfiguration.defaultGoogleModel : "")
         selectedModelOption = ModelOption.selection(for: model)
-        selectedGeminiModel = GeminiModelOption(rawValue: model) ?? .economy
+        selectedGeminiModel = GeminiModelOption.recommendedSelection(for: model)
         apiKey = ""
         refreshStoredAPIKey(for: endpoint)
     }

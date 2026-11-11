@@ -188,6 +188,11 @@ private struct SettingsChatTests {
     static func testProviders(_ store: SharedSettingsStore, _ defaults: UserDefaults) throws {
         expect(store.loadProviderConfiguration(for: .google).model == GeminiModelOption.economy.rawValue,
                "Google did not default to the affordable model")
+        expect(GeminiModelOption.recommendedCases == [.economy]
+               && GeminiModelOption.recommendedSelection(for: GeminiModelOption.economy.rawValue) == .economy
+               && GeminiModelOption.recommendedSelection(for: GeminiModelOption.quality.rawValue) == nil
+               && GeminiModelOption.recommendedSelection(for: GeminiModelOption.legacyFlashLite.rawValue) == nil,
+               "Google recommendations did not preserve older models as custom selections")
         defaults.set(Data(#"{"endpoint":"https://api.openai.com","model":"gpt-5.6-terra"}"#.utf8),
                      forKey: "providerConfiguration")
         let oldOpenAI = store.loadProviderConfiguration()
@@ -280,13 +285,24 @@ private struct SettingsChatTests {
             keyClickSoundEnabled: true
         )
         let modelContext = try googleSnapshot.contextJSON()
-        expect(modelContext.contains(GeminiModelOption.quality.rawValue)
-               && modelContext.contains(GeminiModelOption.economy.rawValue)
-               && !modelContext.contains(GeminiModelOption.legacyFlashLite.rawValue),
+        let context = try JSONSerialization.jsonObject(with: Data(modelContext.utf8)) as! [String: Any]
+        let choices = context["modelChoices"] as! [[String: Any]]
+        expect(context["model"] as? String == GeminiModelOption.quality.rawValue
+               && choices.compactMap { $0["modelID"] as? String } == [GeminiModelOption.economy.rawValue],
                "Google chat choices differ from the recommended picker")
+        let retainedArgon = try googleSnapshot.applying([SettingsChatChange(
+            setting: .model, value: GeminiModelOption.quality.rawValue
+        )])
+        expect(retainedArgon.provider.model == GeminiModelOption.quality.rawValue,
+               "Google chat discarded the previously selected Argon model")
+        let selectedFlash = try googleSnapshot.applying([SettingsChatChange(
+            setting: .model, value: GeminiModelOption.economy.rawValue
+        )])
+        expect(selectedFlash.provider.model == GeminiModelOption.economy.rawValue,
+               "Google chat could not switch to the recommended model")
         do {
             _ = try googleSnapshot.applying([SettingsChatChange(setting: .model, value: "gemini-3.8-flash")])
-            preconditionFailure("Google chat accepted a model outside the two choices")
+            preconditionFailure("Google chat accepted a model outside the recommended choice")
         } catch SettingsChatError.invalidProposal {}
         store.resetUsageStatistics()
     }
