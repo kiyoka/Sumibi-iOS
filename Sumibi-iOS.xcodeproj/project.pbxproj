@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* SumibiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* SumibiApp.swift */; };
 		A10000000000000000000002 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* KeyboardViewController.swift */; };
+		A10000000000000000000024 /* PCCConversionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* PCCConversionClient.swift */; };
+		A10000000000000000000025 /* PCCConversionClient.swift in App Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* PCCConversionClient.swift */; };
+		A10000000000000000000026 /* PCCSettingsChatClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* PCCSettingsChatClient.swift */; };
 		A10000000000000000000003 /* SumibiCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* SumibiCore.swift */; };
 		A10000000000000000000004 /* SumibiKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* SumibiKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000005 /* SumibiCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SumibiCore.framework */; };
@@ -90,6 +93,8 @@
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* SumibiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SumibiApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* PCCConversionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCCConversionClient.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* PCCSettingsChatClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCCSettingsChatClient.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* SumibiCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SumibiCore.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000005 /* SumibiKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SumibiKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -176,6 +181,7 @@
 				A20000000000000000000010 /* Assets.xcassets */,
 				A20000000000000000000001 /* SumibiApp.swift */,
 				A20000000000000000000014 /* SettingsChatView.swift */,
+				A20000000000000000000026 /* PCCSettingsChatClient.swift */,
 				A20000000000000000000009 /* SumibiApp.entitlements */,
 			);
 			path = SumibiApp;
@@ -200,6 +206,7 @@
 				A20000000000000000000020 /* RPGWizard.png */,
 				A20000000000000000000021 /* PersianCatAim.png */,
 				A20000000000000000000002 /* KeyboardViewController.swift */,
+				A20000000000000000000024 /* PCCConversionClient.swift */,
 				A20000000000000000000004 /* Info.plist */,
 				A2000000000000000000000A /* SumibiKeyboard.entitlements */,
 			);
@@ -381,6 +388,8 @@
 				B13200000000000000000002 /* LicenseView.swift */,
 				A10000000000000000000001 /* SumibiApp.swift in Sources */,
 				A10000000000000000000012 /* SettingsChatView.swift in Sources */,
+				A10000000000000000000025 /* PCCConversionClient.swift in App Sources */,
+				A10000000000000000000026 /* PCCSettingsChatClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,6 +399,7 @@
 			files = (
 				A10000000000000000000022 /* KeyClickSound.swift in Sources */,
 				A10000000000000000000002 /* KeyboardViewController.swift in Sources */,
+				A10000000000000000000024 /* PCCConversionClient.swift in Sources */,
 				A10000000000000000000014 /* DragonGameEffectView.swift in Sources */,
 				A10000000000000000000016 /* SpaceLaserEffectView.swift in Sources */,
 				A10000000000000000000018 /* CatHuntEffectView.swift in Sources */,
@@ -465,7 +475,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -478,6 +489,7 @@
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
+				PROVISIONING_PROFILE_SPECIFIER = "Sumibi App PCC Development iPhone 17e";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -491,7 +503,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -504,6 +517,7 @@
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
+				PROVISIONING_PROFILE_SPECIFIER = "Sumibi App PCC App Store 2026";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -516,7 +530,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -525,8 +539,10 @@
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
+				PROVISIONING_PROFILE_SPECIFIER = "Sumibi Keyboard PCC Development iPhone 17e";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -536,7 +552,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -545,6 +562,7 @@
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
+				PROVISIONING_PROFILE_SPECIFIER = "Sumibi Keyboard PCC App Store";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 6.0;

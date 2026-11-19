@@ -37,6 +37,10 @@ private struct SettingsChatTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = SharedSettingsStore(defaults: defaults)
+        testPCCRomajiReading()
+        testAppleAIAvailabilityCopy()
+        testPCCSettings(store, defaults)
+        try await testPCCQuotaRouting()
         testGameSettings(store, defaults)
         try testProposals(store)
         try testLegacyUsage(store, defaults)
@@ -45,7 +49,167 @@ private struct SettingsChatTests {
         try await testTransport(store)
         try await testGoogleTransport(store)
         try await testConsultationTransport(store)
-        print("Chat checks passed: settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
+        print("Chat checks passed: PCC defaults/consent, settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
+    }
+
+    static func testPCCQuotaRouting() async throws {
+        enum MockFailure: Error { case network, external }
+        let quota = PCCQuotaReached(resetDate: Date(timeIntervalSince1970: 2_000_000_000))
+        let request = ConversionRequest(source: "nihongo")
+        var appleResult: Result<ConversionBackend, Error> = .success(.privateCloudCompute)
+        var selected: AIProvider = .openAI
+        var keys: Set<AIProvider> = [.openAI, .google]
+        var consent: Set<AIProvider> = [.openAI, .google]
+        var sends: [(AIProvider, ConversionRequest)] = []
+        var externalFails = false
+        func convert() async throws -> ConversionBackend {
+            try await PCCQuotaRouting.run {
+                try appleResult.get()
+            } onQuota: { blocked in
+                guard let destination = PCCQuotaRouting.fallbackProviders(preferred: selected)
+                    .first(where: { keys.contains($0) && consent.contains($0) }) else {
+                    throw blocked
+                }
+                sends.append((destination, request))
+                if externalFails { throw MockFailure.external }
+                return .external(destination)
+            }
+        }
+
+        var route = try await convert()
+        expect(route == .privateCloudCompute && sends.isEmpty, "Apple must be used before quota")
+        appleResult = .failure(quota)
+        route = try await convert()
+        expect(route == .external(.openAI), "Selected OpenAI must be preferred when both are ready")
+        selected = .google
+        route = try await convert()
+        expect(route == .external(.google), "Selected Gemini must be preferred when both are ready")
+        keys.remove(.google)
+        route = try await convert()
+        expect(route == .external(.openAI), "Missing key must skip Gemini")
+        keys.insert(.google)
+        consent.remove(.openAI)
+        selected = .openAI
+        route = try await convert()
+        expect(route == .external(.google), "Missing consent must skip OpenAI")
+        consent.remove(.google)
+        do {
+            _ = try await convert()
+            fatalError("Quota without consent must stop")
+        } catch let blocked as PCCQuotaReached {
+            expect(blocked == quota, "Reset date must reach the caller")
+        }
+        expect(sends.count == 4 && sends.allSatisfy { $0.1 == request },
+               "Blocked request must not be sent; fallback must receive the original request")
+        consent.insert(.google)
+        externalFails = true
+        do {
+            _ = try await convert()
+            fatalError("External failure must propagate")
+        } catch MockFailure.external {}
+        expect(sends.count == 5, "External failures must not trigger another send")
+        appleResult = .failure(MockFailure.network)
+        do {
+            _ = try await convert()
+            fatalError("Network failure must propagate")
+        } catch MockFailure.network {}
+        expect(sends.count == 5, "Network failure must not send to external AI")
+        appleResult = .success(.privateCloudCompute)
+        route = try await convert()
+        expect(route == .privateCloudCompute && sends.count == 5, "The next request must return to Apple after reset")
+    }
+
+    static func testPCCRomajiReading() {
+        let examples: [(String, String)] = [
+            ("nihongo", "にほんご"),
+            ("hashi", "はし"),
+            ("osameru", "おさめる"),
+            ("kyou wa kitte wo kaita.", "きょう わ きって を かいた."),
+            ("konnichiha", "こんにちは"),
+            ("o-saka", "おーさか"),
+            ("shimasit", "しましt"),
+            ("thingu", "tひんぐ"),
+            ("watashi123", "わたし123"),
+            (".", "."),
+            ("https://sumibi.com", "https://sumibi.com"),
+            ("Sumibi wa benri", "すみび わ べんり"),
+            ("日本語", "日本語"),
+        ]
+        for (source, expected) in examples {
+            expect(PCCRomajiReading.convert(source) == expected, "PCC reading mismatch: \(source)")
+        }
+    }
+
+    static func testAppleAIAvailabilityCopy() {
+        expect(AppleAIAvailabilityCopy.requirements.contains("iOS 27")
+               && AppleAIAvailabilityCopy.requirements.contains("Apple Intelligence対応iPhone"),
+               "Apple AI requirements must state both OS and eligible hardware")
+        expect(AppleAIAvailabilityCopy.olderOS.contains("iOS 27"), "Older OS guidance is missing")
+        expect(AppleAIAvailabilityCopy.ineligible.contains("外部AI"), "Ineligible-device fallback guidance is missing")
+        expect(AppleAIAvailabilityCopy.notReady.contains("設定"), "Temporary unavailability guidance is missing")
+    }
+
+    static func testPCCSettings(_ store: SharedSettingsStore, _ defaults: UserDefaults) {
+        expect(store.loadPCCPreferred(), "PCC must be the default conversion destination")
+        store.savePCCPreferred(false)
+        expect(!store.loadPCCPreferred(), "PCC priority toggle did not persist")
+        store.savePCCPreferred(true)
+
+        let openAI = AIProvider.openAI.defaultEndpoint
+        let google = AIProvider.google.defaultEndpoint
+        defaults.set(openAI, forKey: "aiDataSharingConsentEndpoint")
+        expect(store.hasAIDataSharingConsent(for: openAI), "Legacy consent was lost")
+        expect(!store.hasAIDataSharingConsent(for: google), "Consent spread to another endpoint")
+        store.saveAIDataSharingConsent(for: google)
+        expect(store.hasAIDataSharingConsent(for: openAI)
+               && store.hasAIDataSharingConsent(for: google), "Both endpoints must retain consent")
+        store.revokeAIDataSharingConsent(for: openAI)
+        expect(!store.hasAIDataSharingConsent(for: openAI)
+               && store.hasAIDataSharingConsent(for: google), "Revoking one endpoint changed another")
+        store.revokeAIDataSharingConsent()
+        expect(!store.hasAIDataSharingConsent(for: google), "All consent was not revoked")
+
+        expect(store.loadPCCConversionCount() == 0, "PCC usage count must start at zero")
+        store.recordPCCConversion()
+        expect(store.loadPCCConversionCount() == 1, "PCC usage count did not persist")
+        expect(store.loadPCCChatCount() == 0, "PCC chat count must start at zero")
+        store.recordPCCChat()
+        expect(store.loadPCCChatCount() == 1, "PCC chat count did not persist")
+        store.resetUsageStatistics()
+        expect(store.loadPCCConversionCount() == 0, "PCC usage count did not reset")
+        expect(store.loadPCCChatCount() == 0, "PCC chat count did not reset")
+        expect(store.loadPCCDailyUsage().isEmpty, "PCC daily history did not reset")
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 9 * 60 * 60)!
+        let firstDay = ISO8601DateFormatter().date(from: "2026-11-15T14:00:00Z")!
+        let secondDay = ISO8601DateFormatter().date(from: "2026-11-15T15:00:00Z")!
+        let boundaryPrevious = ISO8601DateFormatter().date(from: "2026-11-15T14:59:59Z")!
+        expect(PCCDailyUsage.dayKey(for: boundaryPrevious, calendar: calendar) == "2026-11-15"
+               && PCCDailyUsage.dayKey(for: secondDay, calendar: calendar) == "2026-11-16",
+               "PCC daily history did not roll over at local midnight")
+        store.recordPCCConversion(at: firstDay, calendar: calendar)
+        store.recordPCCChat(at: firstDay, calendar: calendar)
+        store.recordPCCConversion(at: secondDay, calendar: calendar)
+        store.recordPCCLimitReached(at: secondDay, calendar: calendar)
+        store.recordPCCLimitReached(at: secondDay.addingTimeInterval(60), calendar: calendar)
+        let days = store.loadPCCDailyUsage()
+        expect(days.map(\.day) == ["2026-11-16", "2026-11-15"], "PCC daily dates or order are wrong")
+        expect(days[0].conversionCount == 1 && days[0].chatCount == 0
+               && days[0].totalCount == 1, "PCC second-day count is wrong")
+        expect(days[0].limitReachedAt == secondDay, "PCC limit observation was not preserved")
+        expect(days[0].lastQuotaCheckedAt == secondDay.addingTimeInterval(60),
+               "PCC last quota check was not updated")
+        expect(days[1].conversionCount == 1 && days[1].chatCount == 1
+               && days[1].totalCount == 2, "PCC first-day count is wrong")
+        let thirdDay = secondDay.addingTimeInterval(86_400)
+        store.recordPCCQuotaObservation(isLimitReached: false, at: thirdDay, calendar: calendar)
+        let statusOnly = store.loadPCCDailyUsage().first!
+        expect(statusOnly.day == "2026-11-17" && statusOnly.totalCount == 0
+               && statusOnly.lastQuotaCheckedAt == thirdDay && statusOnly.limitReachedAt == nil,
+               "A quota check without conversions was not recorded")
+        store.resetUsageStatistics()
+        expect(store.loadPCCDailyUsage().isEmpty, "PCC daily history survived reset")
     }
 
     static func testGameSettings(_ store: SharedSettingsStore, _ defaults: UserDefaults) {
@@ -500,7 +664,9 @@ private struct SettingsChatTests {
                                  collectionStartedAt: now.addingTimeInterval(-5 * 86_400)),
             ModelUsageStatistics(model: "gpt-5.6-terra", inputTokens: 10, cachedInputTokens: 5, outputTokens: 2),
         ]
-        let context = SettingsChatUsageContext(statistics: rows, capturedAt: now,
+        let context = SettingsChatUsageContext(statistics: rows,
+                                              appleAIConversionCount: 8, appleAIChatCount: 2,
+                                              capturedAt: now,
                                               timeZone: TimeZone(identifier: "Asia/Tokyo")!)
         let data = Data(try context.contextJSON().utf8)
         let object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -508,6 +674,8 @@ private struct SettingsChatTests {
         expect(object["timeZone"] as? String == "Asia/Tokyo", "Time zone missing")
         expect(object["utcOffsetSeconds"] as? Int == 32_400, "UTC offset missing")
         expect(object["currency"] as? String == "USD", "Cost currency missing")
+        expect(object["appleAIConversionCount"] as? Int == 8, "Apple AI conversion count missing")
+        expect(object["appleAIChatCount"] as? Int == 2, "Apple AI chat count missing")
         let models = object["models"] as! [[String: Any]]
         for (row, model) in zip(rows, models) {
             let serialized = model["estimatedCostUSD"] as? String

@@ -162,11 +162,10 @@ public struct OpenAICompatibleClient: ConversionClient {
         )
     }
 
-    public func chatForSettings(
-        messages: [SettingsChatMessage],
+    public static func settingsChatInstructions(
         snapshot: SettingsChatSnapshot,
         usageContext: SettingsChatUsageContext? = nil
-    ) async throws -> SettingsChatCompletion {
+    ) throws -> String {
         let context = try snapshot.contextJSON()
         let usage = try usageContext?.contextJSON() ?? "利用統計は提供されていません。費用や利用ペースを推測せず、確認できないと説明してください。"
         let instructions = """
@@ -184,7 +183,7 @@ public struct OpenAICompatibleClient: ConversionClient {
         conversionCompletionHapticEnabled: 変換完了時の振動。valueは"true"または"false"。
         keyClickSoundEnabled: キークリック音。valueは"true"または"false"。iOSの消音・音量にも従います。
         「振動を全部止めて」は両方の振動をOFFにします。「振動を止めて」だけなら対象を聞き返してください。
-        通信タイムアウトは15秒固定で変更できません。
+        外部APIの通信タイムアウトは15秒固定で変更できません。
         APIキー、送信先URL、ユーザー辞書、文体プリセットの選択・追加・編集・削除、利用統計のリセットは対象外です。対応する設定画面を案内してください。
         文体プリセットや文章の文体を変更したいという依頼には、changesを空にし、前の設定画面へ戻って「文体プリセット」を開くように案内してください。モデルや音・振動を代わりに変更しないでください。
         ゲーム演出のON/OFF・テーマ変更もチャットからの変更対象外です。changesを空にし、前の設定画面へ戻って「遊び心のあるキーボード」の「ゲーム演出」「テーマ」を操作するように案内してください。現在のON/OFF・選択テーマは取得していないので断定せず、モデルや音・振動を代わりに変更しないでください。
@@ -228,6 +227,18 @@ public struct OpenAICompatibleClient: ConversionClient {
         \(usage)
         </usage_context>
         """
+        return instructions
+    }
+
+    public func chatForSettings(
+        messages: [SettingsChatMessage],
+        snapshot: SettingsChatSnapshot,
+        usageContext: SettingsChatUsageContext? = nil
+    ) async throws -> SettingsChatCompletion {
+        let instructions = try Self.settingsChatInstructions(
+            snapshot: snapshot,
+            usageContext: usageContext
+        )
         let host = configuration.endpoint.host?.lowercased()
         let usesSchema = (host == "api.openai.com"
             && ["gpt-6-sol", "gpt-6-luna"].contains(configuration.model))
