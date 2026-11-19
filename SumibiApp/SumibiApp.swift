@@ -1,3 +1,4 @@
+import FoundationModels
 import SumibiCore
 import SwiftUI
 import UIKit
@@ -13,6 +14,21 @@ struct SumibiApp: App {
 
 private struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
+
+    private enum PCCQuotaDisplay {
+        case available, approaching, reached, unsupportedOS, ineligible, notReady
+
+        var label: String {
+            switch self {
+            case .available: "利用可能"
+            case .approaching: "1日の上限が近づいています"
+            case .reached: "1日の上限に達しました"
+            case .unsupportedOS: "iOS 27以降が必要です"
+            case .ineligible: "端末または地域が非対応です"
+            case .notReady: "現在利用できません"
+            }
+        }
+    }
 
     private enum APIField: Hashable {
         case endpoint
@@ -36,7 +52,9 @@ private struct ContentView: View {
     @State private var storedAPIKeyDisplay: String?
     @State private var statusMessage = ""
     @State private var testSource = "sumibi yakiniku ga sukidesu ."
-    @State private var testResult = ""
+    @State private var externalTestSource = "sumibi yakiniku ga sukidesu ."
+    @State private var appleTestResult = ""
+    @State private var externalTestResult = ""
     @State private var isTesting = false
     @State private var hapticFeedbackEnabled = true
     @State private var conversionCompletionHapticEnabled = true
@@ -46,6 +64,13 @@ private struct ContentView: View {
     @State private var userDictionary = ""
     @State private var conversionPromptConfiguration = ConversionPromptConfiguration()
     @State private var hasAIDataSharingConsent = false
+    @State private var pccPreferred = true
+    @State private var pccConversionCount = 0
+    @State private var pccChatCount = 0
+    @State private var pccDailyUsage: [PCCDailyUsage] = []
+    @State private var pccQuotaStatus = PCCQuotaDisplay.notReady
+    @State private var pccQuotaResetDate: Date?
+    @State private var pccQuotaCheckedAt: Date?
     @State private var isShowingAPIKeyDeletionConfirmation = false
     @State private var usageStatistics: [ModelUsageStatistics] = []
     @State private var isShowingUsageResetConfirmation = false
@@ -55,15 +80,16 @@ private struct ContentView: View {
         NavigationStack {
             Form {
                 introductionSection
-                providerSection
+                appleAISection
                 settingsChatSection
+                appleConversionTestSection
                 keyboardBehaviorSection
                 keyboardGameSection
                 customSystemPromptSection
                 userDictionarySection
-                conversionTestSection
                 usageSection
                 keyboardSetupSection
+                providerSection
                 privacySection
                 Section("このアプリについて") {
                     NavigationLink {
@@ -116,7 +142,7 @@ private struct ContentView: View {
                     loadUsageStatistics()
                 }
             } message: {
-                Text("モデルごとのトークン数、概算料金、変換回数、設定チャット回数を0に戻します。")
+                Text("AppleのAIの日別履歴・変換・チャット回数と、外部AIのモデルごとのトークン数、概算料金、変換・チャット回数を0に戻します。")
             }
         }
     }
@@ -124,16 +150,54 @@ private struct ContentView: View {
     private var introductionSection: some View {
         Section {
             Label("英字QWERTYで入力し、変換キーで日本語へ変換します。", systemImage: "keyboard")
-            Text("変換には、利用者が設定したOpenAI互換APIを使用します。")
-                .foregroundStyle(.secondary)
         } header: {
             Text("Sumibiについて")
         }
     }
 
+    private var appleAISection: some View {
+        Section {
+            Label("ローマ字から日本語へ変換", systemImage: "character.cursor.ibeam")
+            Label("チャットで使い方や費用を質問", systemImage: "bubble.left.and.bubble.right")
+            Text(AppleAIAvailabilityCopy.requirements)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Link("対応機種と条件をAppleで確認", destination: URL(string: "https://support.apple.com/ja-jp/121115")!)
+            Toggle("変換とチャットでAppleのAIを優先", isOn: $pccPreferred)
+                .onChange(of: pccPreferred) { _, preferred in
+                    SharedSettingsStore()?.savePCCPreferred(preferred)
+                }
+            LabeledContent("1日の利用枠", value: pccQuotaStatus.label)
+            if let pccQuotaResetDate {
+                LabeledContent(
+                    "利用枠の更新予定",
+                    value: pccQuotaResetDate.formatted(date: .numeric, time: .shortened)
+                )
+            } else if case .reached = pccQuotaStatus {
+                LabeledContent("利用枠の更新予定", value: "Appleから未通知")
+            }
+            Button("利用枠の状態を更新", systemImage: "arrow.clockwise") {
+                loadUsageStatistics()
+            }
+            if let pccQuotaCheckedAt {
+                Text("状態確認：\(pccQuotaCheckedAt.formatted(date: .numeric, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("AppleのAIでできること")
+        } footer: {
+            Text("AppleのAIは無料ですが、1日の利用上限があります。利用できないiPhoneや上限到達後も使う場合は、画面下の「外部AI（オプション）」にご自身のAPIキーを設定してください。外部AIのAPI料金が発生する場合があります。")
+        }
+    }
+
     private var providerSection: some View {
         Section {
-            Picker("接続先", selection: Binding(
+            Text("AppleのAIの1日の上限後、またはAppleのAIを優先しない場合に使います。OpenAI／GeminiなどのAPIキーはご自身で用意してください。接続先ごとのAPIキーは端末のKeychainに保存します。テスト時も入力内容を選択した外部AIへ送信します。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Picker("外部AIの接続先", selection: Binding(
                 get: { provider },
                 set: { selectProvider($0) }
             )) {
@@ -214,6 +278,8 @@ private struct ContentView: View {
                     .privacySensitive()
             }
 
+            Toggle("この外部AIへのデータ送信に同意する", isOn: $hasAIDataSharingConsent)
+
             Button("設定を保存") {
                 focusedAPIField = nil
                 saveSettings()
@@ -235,14 +301,31 @@ private struct ContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            TextField("外部AIで変換するローマ字", text: $externalTestSource, axis: .vertical)
+                .lineLimit(2 ... 4)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            Button {
+                Task { await testExternalConversion() }
+            } label: {
+                if isTesting {
+                    HStack { ProgressView(); Text("変換中") }
+                } else {
+                    Text("設定した外部AIで変換をテスト")
+                }
+            }
+            .disabled(isTesting || externalTestSource.isEmpty || hasUnsavedAPISettings)
+
+            if !externalTestResult.isEmpty {
+                Text(externalTestResult).textSelection(.enabled)
+            }
         } header: {
-            Text("API設定")
-        } footer: {
-            Text("Googleでは精度重視と速度・費用重視の2モデルから選べます。接続先とモデルはApp Group、接続先別のAPIキーは共有Keychainへ保存します。")
+            Text("外部AI（オプション）")
         }
     }
 
-    private var conversionTestSection: some View {
+    private var appleConversionTestSection: some View {
         Section {
             TextField("変換するローマ字", text: $testSource, axis: .vertical)
                 .lineLimit(2 ... 4)
@@ -251,7 +334,7 @@ private struct ContentView: View {
 
             Button {
                 Task {
-                    await testConversion()
+                    await testAppleConversion()
                 }
             } label: {
                 if isTesting {
@@ -260,19 +343,19 @@ private struct ContentView: View {
                         Text("変換中")
                     }
                 } else {
-                    Text("設定したAPIで変換をテスト")
+                    Text("AppleのAI変換をテスト")
                 }
             }
             .disabled(isTesting || testSource.isEmpty)
 
-            if !testResult.isEmpty {
-                Text(testResult)
+            if !appleTestResult.isEmpty {
+                Text(appleTestResult)
                     .textSelection(.enabled)
             }
         } header: {
-            Text("変換テスト")
+            Text("AppleのAI変換テスト")
         } footer: {
-            Text("テスト時も入力内容を設定済みAPIへ送信します。")
+            Text("外部AIの設定とは別に、AppleのAIだけで変換を確認します。入力内容はAppleへ送信します。")
         }
     }
 
@@ -286,17 +369,29 @@ private struct ContentView: View {
             } label: {
                 Label("チャットで質問", systemImage: "bubble.left.and.bubble.right")
             }
-            .disabled(!hasLoadedSettings || hasUnsavedAPISettings)
+            .disabled(!hasLoadedSettings)
         } footer: {
             Text(hasUnsavedAPISettings
-                 ? "API設定を保存してからチャットを開いてください。"
-                 : "使い方や概算費用を質問し、モデル、音や振動の設定を変更できます。")
+                 ? "チャットは保存済みの接続先を使います。編集中の外部AI設定は保存後に反映されます。"
+                 : "AppleのAIを優先して使い方や概算費用を質問できます。上限後は設定済みの外部AIへ切り替わります。")
         }
     }
 
     private var usageSection: some View {
         Section {
-            if usageStatistics.isEmpty {
+            NavigationLink {
+                PCCDailyHistoryView()
+            } label: {
+                Label("AppleのAI・日別履歴", systemImage: "calendar")
+            }
+            if pccConversionCount > 0 {
+                LabeledContent("AppleのAI変換回数", value: "\(pccConversionCount)回")
+            }
+            if pccChatCount > 0 {
+                LabeledContent("AppleのAIチャット回数", value: "\(pccChatCount)回")
+            }
+            if usageStatistics.isEmpty && pccConversionCount == 0
+                && pccChatCount == 0 && pccDailyUsage.isEmpty {
                 Text("利用履歴はありません。")
                     .foregroundStyle(.secondary)
             } else {
@@ -349,7 +444,7 @@ private struct ContentView: View {
         } header: {
             Text("利用状況")
         } footer: {
-            Text("APIレスポンスのトークン数を端末内に記録します。料金はOpenAIまたはGoogleの有料Standard料金による概算です。無料枠や実際の請求額とは異なります。その他・料金表にないモデルは不明と表示します。")
+            Text("AppleのAIは、この版以降の変換・チャット成功回数と、確認できた上限状態を日付別に記録します。旧版の累計は日別履歴に振り分けられません。正確な残り回数・上限回数は表示できません。外部AIの料金は概算です。")
         }
     }
 
@@ -364,7 +459,45 @@ private struct ContentView: View {
     }
 
     private func loadUsageStatistics() {
-        usageStatistics = SharedSettingsStore()?.loadUsageStatistics() ?? []
+        refreshPCCQuotaStatus()
+        let store = SharedSettingsStore()
+        usageStatistics = store?.loadUsageStatistics() ?? []
+        pccConversionCount = store?.loadPCCConversionCount() ?? 0
+        pccChatCount = store?.loadPCCChatCount() ?? 0
+        pccDailyUsage = store?.loadPCCDailyUsage() ?? []
+    }
+
+    private func refreshPCCQuotaStatus() {
+        pccQuotaCheckedAt = Date()
+        pccQuotaResetDate = nil
+        guard #available(iOS 27.0, *) else {
+            pccQuotaStatus = .unsupportedOS
+            return
+        }
+        let model = PrivateCloudComputeLanguageModel()
+        switch model.availability {
+        case .available:
+            break
+        case .unavailable(.deviceNotEligible):
+            pccQuotaStatus = .ineligible
+            return
+        case .unavailable:
+            pccQuotaStatus = .notReady
+            return
+        }
+        let quota = model.quotaUsage
+        pccQuotaResetDate = quota.resetDate
+        if quota.isLimitReached {
+            pccQuotaStatus = .reached
+            SharedSettingsStore()?.recordPCCLimitReached()
+        } else {
+            SharedSettingsStore()?.recordPCCQuotaObservation(isLimitReached: false)
+            if case .belowLimit(let detail) = quota.status, detail.isApproachingLimit {
+                pccQuotaStatus = .approaching
+            } else {
+                pccQuotaStatus = .available
+            }
+        }
     }
 
     private var userDictionarySection: some View {
@@ -488,14 +621,12 @@ private struct ContentView: View {
 
     private var privacySection: some View {
         Section {
-            Text("送信先：\(normalizedEndpointDisplay)")
+            Text("優先する変換・チャット先：AppleのAI（対応端末のみ）")
+                .font(.footnote)
+            Text("外部AIの送信先：\(normalizedEndpointDisplay)")
                 .font(.footnote)
                 .textSelection(.enabled)
-            Toggle(
-                "この第三者AIへのデータ送信に同意する",
-                isOn: $hasAIDataSharingConsent
-            )
-            Label("変換キーを押したときだけ送信", systemImage: "hand.tap")
+            Label("変換・チャット・テスト操作時に送信", systemImage: "hand.tap")
             Label("変換対象と最小限の周辺文脈を送信", systemImage: "text.quote")
             Label("ユーザー辞書と変換プロンプトは毎回あわせて送信", systemImage: "character.book.closed")
             Label("キー入力や原文をログへ保存しない", systemImage: "doc.badge.ellipsis")
@@ -508,7 +639,7 @@ private struct ContentView: View {
         } header: {
             Text("プライバシー")
         } footer: {
-            Text("同意すると、変換対象、最小限の周辺文脈、登録したユーザー辞書、変換プロンプトを上記の第三者AIへ送信します。相談チャットでは会話内容、変更対象の現在値、モデル別の利用統計（集計開始日時・回数・トークン数・概算料金）を送信します。送信先でのデータ処理と保存は、利用者が選択したAPIプロバイダーの規約に従います。送信先を変更した場合は、改めて同意が必要です。同意はいつでも取り消せます。")
+            Text("AppleのAI（Private Cloud Compute）を優先する場合、変換内容やチャットの会話・設定値・利用統計をAppleへ送信します。1日の上限後は、APIキーと送信同意のある外部AIへ切り替わり、API料金が発生する場合があります。第三者AIへの同意は接続先ごとに保存・取消できます。")
         }
     }
 
@@ -544,7 +675,7 @@ private struct ContentView: View {
             hasAIDataSharingConsent = true
             statusMessage = "AIへのデータ送信に同意しました。"
         } else {
-            store.revokeAIDataSharingConsent()
+            store.revokeAIDataSharingConsent(for: endpoint)
             hasAIDataSharingConsent = false
             statusMessage = "AIへのデータ送信の同意を取り消しました。"
         }
@@ -582,6 +713,7 @@ private struct ContentView: View {
             userDictionary = store.loadUserDictionary()
             conversionPromptConfiguration = store.loadConversionPromptConfiguration()
             hasAIDataSharingConsent = store.hasAIDataSharingConsent(for: configuration.endpoint)
+            pccPreferred = store.loadPCCPreferred()
         }
         refreshStoredAPIKey(for: endpoint)
         hasLoadedSettings = true
@@ -657,21 +789,68 @@ private struct ContentView: View {
     }
 
     @MainActor
-    private func testConversion() async {
+    private func testAppleConversion() async {
+        guard #available(iOS 27.0, *) else {
+            appleTestResult = AppleAIAvailabilityCopy.olderOS
+            return
+        }
+        let pcc = PrivateCloudComputeLanguageModel()
+        switch pcc.availability {
+        case .available:
+            break
+        case .unavailable(.deviceNotEligible):
+            appleTestResult = AppleAIAvailabilityCopy.ineligible
+            return
+        case .unavailable:
+            appleTestResult = AppleAIAvailabilityCopy.notReady
+            return
+        }
+        if pcc.quotaUsage.isLimitReached {
+            appleTestResult = "AppleのAI変換は本日の上限に達しました。"
+            loadUsageStatistics()
+            return
+        }
+        isTesting = true
+        appleTestResult = ""
+        defer { isTesting = false }
+        do {
+            let response = try await PCCConversionClient().convert(
+                ConversionRequest(
+                    source: testSource,
+                    userDictionary: userDictionary,
+                    customSystemPrompt: conversionPromptConfiguration.activePrompt
+                )
+            )
+            SharedSettingsStore()?.recordPCCConversion()
+            loadUsageStatistics()
+            appleTestResult = response.candidates.first ?? "候補がありません。"
+        } catch let error as PrivateCloudComputeLanguageModel.Error {
+            if case .quotaLimitReached = error {
+                appleTestResult = "AppleのAI変換は本日の上限に達しました。"
+                loadUsageStatistics()
+            } else {
+                appleTestResult = "AppleのAI変換を利用できません。通信状態を確認してください。"
+            }
+        } catch {
+            appleTestResult = "AppleのAI変換に失敗しました。"
+        }
+    }
+
+    @MainActor
+    private func testExternalConversion() async {
         let normalizedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let endpointURL = URL(string: normalizedEndpoint), !normalizedModel.isEmpty else {
-            testResult = "APIのURLとモデル名を入力してください。"
+            externalTestResult = "APIのURLとモデル名を入力してください。"
             return
         }
         guard SharedSettingsStore()?.hasAIDataSharingConsent(for: normalizedEndpoint) == true else {
-            testResult = "プライバシー欄で、第三者AIへのデータ送信に同意してください。"
+            externalTestResult = "外部AIへのデータ送信に同意してください。"
             return
         }
 
-        saveSettings()
         isTesting = true
-        testResult = ""
+        externalTestResult = ""
         defer { isTesting = false }
 
         do {
@@ -685,7 +864,7 @@ private struct ContentView: View {
             )
             let response = try await client.convert(
                 ConversionRequest(
-                    source: testSource,
+                    source: externalTestSource,
                     userDictionary: userDictionary,
                     customSystemPrompt: conversionPromptConfiguration.activePrompt
                 )
@@ -698,15 +877,15 @@ private struct ContentView: View {
                 )
                 loadUsageStatistics()
             }
-            testResult = response.candidates.first ?? "候補がありません。"
+            externalTestResult = response.candidates.first ?? "候補がありません。"
         } catch let error as OpenAICompatibleClientError {
-            testResult = message(for: error)
+            externalTestResult = message(for: error)
         } catch let error as URLError {
-            testResult = error.code == .timedOut
+            externalTestResult = error.code == .timedOut
                 ? "変換がタイムアウトしました。"
                 : "ネットワーク通信に失敗しました。"
         } catch {
-            testResult = "変換に失敗しました。"
+            externalTestResult = "変換に失敗しました。"
         }
     }
 
@@ -725,6 +904,91 @@ private struct ContentView: View {
         case .httpError:
             "APIリクエストに失敗しました。"
         }
+    }
+}
+
+private struct PCCDailyHistoryView: View {
+    private struct DayEntry: Identifiable {
+        let date: Date
+        let day: String
+        let usage: PCCDailyUsage?
+
+        var id: String { day }
+
+        var limitStatus: String {
+            if let reachedAt = usage?.limitReachedAt {
+                return "到達（\(reachedAt.formatted(date: .omitted, time: .shortened))）"
+            }
+            if let checkedAt = usage?.lastQuotaCheckedAt {
+                return "未到達（\(checkedAt.formatted(date: .omitted, time: .shortened))確認）"
+            }
+            if (usage?.totalCount ?? 0) > 0 {
+                return "未到達（使用時点）"
+            }
+            return "未確認"
+        }
+
+        var limitColor: Color {
+            usage?.limitReachedAt != nil ? .orange : .secondary
+        }
+    }
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var records: [PCCDailyUsage] = []
+
+    private var days: [DayEntry] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let byDay = Dictionary(uniqueKeysWithValues: records.map { ($0.day, $0) })
+        return (0..<30).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
+                return nil
+            }
+            let day = PCCDailyUsage.dayKey(for: date, calendar: calendar)
+            return DayEntry(date: date, day: day, usage: byDay[day])
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Text("端末の現地時刻で毎日0:00（前日の24:00）に区切ります。Appleの利用枠の更新時刻とは一致しない場合があります。")
+                Text("「未到達」は記載した時刻に確認できた状態です。その後確認できなかった時間帯は含みません。記録のない日は「未確認」です。")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            Section("直近30日") {
+                ForEach(days) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(entry.date.formatted(date: .numeric, time: .omitted))
+                                .font(.headline)
+                            Spacer()
+                            Text(entry.limitStatus)
+                                .font(.subheadline)
+                                .foregroundStyle(entry.limitColor)
+                        }
+                        Text("変換 \(entry.usage?.conversionCount ?? 0)回  ·  チャット \(entry.usage?.chatCount ?? 0)回")
+                            .font(.subheadline)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 3)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .navigationTitle("AppleのAI・日別履歴")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { reload() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { reload() }
+        }
+    }
+
+    private func reload() {
+        records = SharedSettingsStore()?.loadPCCDailyUsage() ?? []
     }
 }
 

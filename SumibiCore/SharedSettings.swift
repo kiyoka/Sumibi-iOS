@@ -1,5 +1,16 @@
 import Foundation
 
+/// PCCの対応条件をアプリ本体・チャット・キーボードで同じ表現にする。
+public enum AppleAIAvailabilityCopy {
+    public static let requirements = "AppleのAIにはiOS 27以降とApple Intelligence対応iPhone（iPhone 15 Pro／Pro Max、iPhone 16以降）が必要です。対応する言語・地域でも利用できる必要があります。"
+    public static let olderOS = "AppleのAIはiOS 27以降の対応iPhoneで利用できます。外部AIを設定してください。"
+    public static let ineligible = "AppleのAIにはApple Intelligence対応iPhoneと対応地域が必要です。外部AIを設定してください。"
+    public static let notReady = "AppleのAIは現在準備できていません。Apple Intelligenceの設定・言語と通信状態を確認してください。"
+    public static let shortOlderOS = "AppleのAIにはiOS 27以降が必要です"
+    public static let shortIneligible = "このiPhone・地域はAppleのAIに非対応です"
+    public static let shortNotReady = "AppleのAIは準備中です。設定を確認してください"
+}
+
 // Shared by the settings picker and the settings chat context.
 public enum ModelOption: String, CaseIterable, Identifiable, Codable, Sendable {
     case gpt6Sol = "gpt-6-sol"
@@ -178,6 +189,11 @@ public struct SharedSettingsStore {
         static let customSystemPrompt = "customSystemPrompt"
         static let conversionPromptConfiguration = "conversionPromptConfiguration"
         static let aiDataSharingConsentEndpoint = "aiDataSharingConsentEndpoint"
+        static let aiDataSharingConsentEndpoints = "aiDataSharingConsentEndpoints"
+        static let pccPreferred = "pccPreferred"
+        static let pccConversionCount = "pccConversionCount"
+        static let pccChatCount = "pccChatCount"
+        static let pccDailyUsage = "pccDailyUsage"
         static let usageStatistics = "usageStatistics"
     }
 
@@ -400,7 +416,7 @@ public struct SharedSettingsStore {
         guard !normalizedEndpoint.isEmpty else {
             return false
         }
-        return defaults.string(forKey: Key.aiDataSharingConsentEndpoint) == normalizedEndpoint
+        return consentedEndpoints().contains(normalizedEndpoint)
     }
 
     public func saveAIDataSharingConsent(for endpoint: String) {
@@ -408,11 +424,99 @@ public struct SharedSettingsStore {
         guard !normalizedEndpoint.isEmpty else {
             return
         }
-        defaults.set(normalizedEndpoint, forKey: Key.aiDataSharingConsentEndpoint)
+        var endpoints = consentedEndpoints()
+        endpoints.insert(normalizedEndpoint)
+        defaults.set(endpoints.sorted(), forKey: Key.aiDataSharingConsentEndpoints)
+        defaults.removeObject(forKey: Key.aiDataSharingConsentEndpoint)
     }
 
-    public func revokeAIDataSharingConsent() {
+    public func revokeAIDataSharingConsent(for endpoint: String? = nil) {
+        guard let endpoint else {
+            defaults.removeObject(forKey: Key.aiDataSharingConsentEndpoints)
+            defaults.removeObject(forKey: Key.aiDataSharingConsentEndpoint)
+            return
+        }
+        var endpoints = consentedEndpoints()
+        endpoints.remove(endpoint.trimmingCharacters(in: .whitespacesAndNewlines))
+        defaults.set(endpoints.sorted(), forKey: Key.aiDataSharingConsentEndpoints)
         defaults.removeObject(forKey: Key.aiDataSharingConsentEndpoint)
+    }
+
+    private func consentedEndpoints() -> Set<String> {
+        var endpoints = Set(defaults.stringArray(forKey: Key.aiDataSharingConsentEndpoints) ?? [])
+        if let legacy = defaults.string(forKey: Key.aiDataSharingConsentEndpoint) {
+            endpoints.insert(legacy)
+        }
+        return endpoints
+    }
+
+    public func loadPCCPreferred() -> Bool {
+        defaults.object(forKey: Key.pccPreferred) as? Bool ?? true
+    }
+
+    public func savePCCPreferred(_ preferred: Bool) {
+        defaults.set(preferred, forKey: Key.pccPreferred)
+    }
+
+    public func loadPCCConversionCount() -> Int {
+        defaults.integer(forKey: Key.pccConversionCount)
+    }
+
+    public func recordPCCConversion(at date: Date = Date(), calendar: Calendar = .current) {
+        defaults.set(loadPCCConversionCount() + 1, forKey: Key.pccConversionCount)
+        updatePCCDailyUsage(at: date, calendar: calendar) {
+            $0.conversionCount += 1
+            $0.lastQuotaCheckedAt = date
+        }
+    }
+
+    public func loadPCCChatCount() -> Int {
+        defaults.integer(forKey: Key.pccChatCount)
+    }
+
+    public func recordPCCChat(at date: Date = Date(), calendar: Calendar = .current) {
+        defaults.set(loadPCCChatCount() + 1, forKey: Key.pccChatCount)
+        updatePCCDailyUsage(at: date, calendar: calendar) {
+            $0.chatCount += 1
+            $0.lastQuotaCheckedAt = date
+        }
+    }
+
+    public func loadPCCDailyUsage() -> [PCCDailyUsage] {
+        guard let data = defaults.data(forKey: Key.pccDailyUsage),
+              let rows = try? decoder.decode([PCCDailyUsage].self, from: data) else { return [] }
+        return rows.sorted { $0.day > $1.day }
+    }
+
+    public func recordPCCLimitReached(at date: Date = Date(), calendar: Calendar = .current) {
+        recordPCCQuotaObservation(isLimitReached: true, at: date, calendar: calendar)
+    }
+
+    public func recordPCCQuotaObservation(
+        isLimitReached: Bool, at date: Date = Date(), calendar: Calendar = .current
+    ) {
+        updatePCCDailyUsage(at: date, calendar: calendar) { row in
+            row.lastQuotaCheckedAt = date
+            if isLimitReached && row.limitReachedAt == nil { row.limitReachedAt = date }
+        }
+    }
+
+    private func updatePCCDailyUsage(
+        at date: Date, calendar: Calendar,
+        update: (inout PCCDailyUsage) -> Void
+    ) {
+        var rows = loadPCCDailyUsage()
+        let day = PCCDailyUsage.dayKey(for: date, calendar: calendar)
+        if let index = rows.firstIndex(where: { $0.day == day }) {
+            update(&rows[index])
+        } else {
+            var row = PCCDailyUsage(day: day)
+            update(&row)
+            rows.append(row)
+        }
+        if let data = try? encoder.encode(rows) {
+            defaults.set(data, forKey: Key.pccDailyUsage)
+        }
     }
 
     public func loadUsageStatistics() -> [ModelUsageStatistics] {
@@ -491,6 +595,24 @@ public struct SharedSettingsStore {
         if let data = try? encoder.encode(reset) {
             defaults.set(data, forKey: Key.usageStatistics)
         }
+        defaults.set(0, forKey: Key.pccConversionCount)
+        defaults.set(0, forKey: Key.pccChatCount)
+        defaults.removeObject(forKey: Key.pccDailyUsage)
+    }
+}
+
+public struct PCCDailyUsage: Codable, Equatable, Identifiable, Sendable {
+    public var id: String { day }
+    public let day: String
+    public var conversionCount: Int = 0
+    public var chatCount: Int = 0
+    public var limitReachedAt: Date?
+    public var lastQuotaCheckedAt: Date?
+    public var totalCount: Int { conversionCount + chatCount }
+
+    public static func dayKey(for date: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 }
 

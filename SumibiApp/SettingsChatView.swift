@@ -1,3 +1,4 @@
+import FoundationModels
 import SumibiCore
 import SwiftUI
 
@@ -15,6 +16,7 @@ private struct ChatEntry: Identifiable {
     let text: String
     var responseJSON: String?
     var proposal: ChatProposal?
+    var serviceName: String?
 
     var wireMessage: SettingsChatMessage {
         let content: String
@@ -34,6 +36,18 @@ private struct ChatEntry: Identifiable {
 }
 
 struct SettingsChatView: View {
+    private struct ExternalDestination {
+        let provider: AIProvider
+        let configuration: ProviderConfiguration
+        let client: OpenAICompatibleClient
+    }
+
+    private enum ChatRoute {
+        case apple
+        case external(ExternalDestination)
+        case blocked(String)
+    }
+
     @Environment(\.dismiss) private var dismiss
     let onSettingsChanged: () -> Void
 
@@ -41,6 +55,7 @@ struct SettingsChatView: View {
     @State private var input = ""
     @State private var errorMessage = ""
     @State private var connectionMessage = ""
+    @State private var routeNotice = ""
     @State private var activeModel = ""
     @State private var isSending = false
     @State private var requestID: UUID?
@@ -100,7 +115,7 @@ struct SettingsChatView: View {
 
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("ここでは設定済みのAIと会話します。開発者や人間の担当者への問い合わせではありません。")
+            Text("ここではAIと会話します。開発者や人間の担当者への問い合わせではありません。")
                 .font(.subheadline)
             Text("使い方、遊び心のあるキーボード、概算費用を質問できます。モデル、音や振動の設定変更もできます。")
             Text("変更内容を確認し、「適用する」を押すと保存されます。")
@@ -111,12 +126,20 @@ struct SettingsChatView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("会話内容、現在の設定、モデル別の利用統計（集計開始日時・回数・トークン数・概算料金）を設定済みAIへ送信します。費用予測はこの端末の記録に基づくAIの見積もりで、実際の請求額ではありません。会話にもAPIの利用料金が発生します。APIキーなどの秘密情報は入力しないでください。会話はこの画面を閉じると消えます。")
+            Text(activeModel == "AppleのAI" || routeNotice.contains("上限に達したため")
+                 ? "会話内容、現在の設定、モデル別の利用統計を、まずAppleのAIへ送信します。AppleのAIの上限後は設定済みの外部AIへ切り替わり、API料金が発生する場合があります。"
+                 : "会話内容、現在の設定、モデル別の利用統計を、設定済みの外部AIへ送信します。API料金が発生する場合があります。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Text("費用予測は端末内の記録に基づく概算で、実際の請求額ではありません。APIキーなどの秘密情報は入力しないでください。会話はこの画面を閉じると消えます。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if !routeNotice.isEmpty {
+                Text(routeNotice).font(.caption).foregroundStyle(.orange)
+            }
             if !connectionMessage.isEmpty {
                 Text(connectionMessage).foregroundStyle(.orange)
-                Button("API設定を確認する") { dismiss() }
+                Button("設定画面に戻る") { dismiss() }
             }
             if entries.isEmpty {
                 ForEach(examples, id: \.self) { example in
@@ -155,7 +178,7 @@ struct SettingsChatView: View {
 
     private func messageView(_ entry: ChatEntry) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(entry.role == .user ? "あなた" : "AI（Sumibi）")
+            Text(entry.role == .user ? "あなた" : "AI（\(entry.serviceName ?? "Sumibi")）")
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
             Text(entry.text).textSelection(.enabled)
@@ -213,12 +236,111 @@ struct SettingsChatView: View {
             connectionMessage = "共有設定を読み込めません。"
             return
         }
-        let provider = store.loadProviderConfiguration()
-        activeModel = provider.model
-        if !store.hasAIDataSharingConsent(for: provider.endpoint) {
-            connectionMessage = "API設定と、プライバシー欄の第三者AIへの送信同意を確認してください。"
-        } else {
+        switch chatRoute(using: store) {
+        case .apple:
+            activeModel = "AppleのAI"
             connectionMessage = ""
+        case .external(let destination):
+            activeModel = "\(destination.provider.displayName)・\(destination.configuration.model)"
+            connectionMessage = ""
+        case .blocked(let message):
+            activeModel = ""
+            connectionMessage = message
+        }
+    }
+
+    private func chatRoute(using store: SharedSettingsStore) -> ChatRoute {
+        var pccUnavailableMessage: String?
+        if store.loadPCCPreferred() {
+            if #available(iOS 27.0, *) {
+                switch PrivateCloudComputeLanguageModel().availability {
+                case .available:
+                    return .apple
+                case .unavailable(.deviceNotEligible):
+                    pccUnavailableMessage = AppleAIAvailabilityCopy.ineligible
+                case .unavailable:
+                    return .blocked(AppleAIAvailabilityCopy.notReady)
+                }
+            } else {
+                pccUnavailableMessage = AppleAIAvailabilityCopy.olderOS
+            }
+        }
+        if let destination = externalDestination(using: store) {
+            return .external(destination)
+        }
+        return .blocked(pccUnavailableMessage
+            ?? "外部AIのAPIキーと送信同意を設定してください。")
+    }
+
+    private func externalDestination(
+        using store: SharedSettingsStore, provider: AIProvider? = nil
+    ) -> ExternalDestination? {
+        let configuration = provider.map { store.loadProviderConfiguration(for: $0) }
+            ?? store.loadProviderConfiguration()
+        guard let url = URL(string: configuration.endpoint), url.host != nil,
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              !configuration.model.isEmpty,
+              store.hasAIDataSharingConsent(for: configuration.endpoint) else { return nil }
+        let key: String?
+        do {
+            key = try APIKeyStore().load(for: configuration.endpoint)
+        } catch {
+            return nil
+        }
+        guard configuration.provider == .other || key?.isEmpty == false else { return nil }
+        return ExternalDestination(
+            provider: configuration.provider,
+            configuration: configuration,
+            client: OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
+                endpoint: url, model: configuration.model, apiKey: key
+            ))
+        )
+    }
+
+    @MainActor
+    private func sendChat(
+        route: ChatRoute,
+        messages: [SettingsChatMessage],
+        snapshot: SettingsChatSnapshot,
+        usageContext: SettingsChatUsageContext,
+        store: SharedSettingsStore
+    ) async throws -> (SettingsChatCompletion, String, AIProvider?) {
+        switch route {
+        case .apple:
+            if #available(iOS 27.0, *) {
+                return try await PCCQuotaRouting.run {
+                    let response = try await PCCSettingsChatClient().chatForSettings(
+                        messages: messages, snapshot: snapshot, usageContext: usageContext
+                    )
+                    routeNotice = ""
+                    return (response, "AppleのAI", nil)
+                } onQuota: { quota in
+                    store.recordPCCLimitReached()
+                    let providers = PCCQuotaRouting.fallbackProviders(
+                        preferred: store.loadProviderConfiguration().provider
+                    )
+                    guard let destination = providers.lazy.compactMap({
+                        externalDestination(using: store, provider: $0)
+                    }).first else {
+                        throw quota
+                    }
+                    let response = try await destination.client.chatForSettings(
+                        messages: messages, snapshot: snapshot, usageContext: usageContext
+                    )
+                    routeNotice = "AppleのAIの上限に達したため、\(destination.provider.displayName)に切り替えました（API費用に注意）。"
+                    activeModel = "\(destination.provider.displayName)・\(destination.configuration.model)"
+                    return (response, destination.provider.displayName, destination.provider)
+                }
+            }
+            throw PCCSettingsChatError.notReady
+        case .external(let destination):
+            let response = try await destination.client.chatForSettings(
+                messages: messages, snapshot: snapshot, usageContext: usageContext
+            )
+            routeNotice = ""
+            return (response, destination.provider.displayName, destination.provider)
+        case .blocked(let message):
+            throw NSError(domain: "SumibiChat", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
         }
     }
 
@@ -233,22 +355,9 @@ struct SettingsChatView: View {
             return
         }
         let snapshot = store.loadSettingsChatSnapshot()
-        guard let url = URL(string: snapshot.provider.endpoint),
-              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
-              url.host != nil, !snapshot.provider.model.isEmpty
-        else {
-            connectionMessage = "APIのURLとモデル名を確認してください。"
-            return
-        }
-        let apiKey: String?
-        do {
-            apiKey = try APIKeyStore().load(for: snapshot.provider.endpoint)
-        } catch {
-            connectionMessage = "保存したAPIキーを読み込めません。API設定を確認してください。"
-            return
-        }
-        if snapshot.provider.provider != .other, apiKey?.isEmpty ?? true {
-            connectionMessage = "選択したAIのAPIキーを保存してから利用してください。"
+        let route = chatRoute(using: store)
+        if case .blocked(let message) = route {
+            connectionMessage = message
             return
         }
         let id = UUID()
@@ -259,10 +368,11 @@ struct SettingsChatView: View {
         let entry = ChatEntry(role: .user, text: text)
         entries.append(entry)
         let history = entries.map(\.wireMessage)
-        let usageContext = SettingsChatUsageContext(statistics: store.loadUsageStatistics())
-        let client = OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
-            endpoint: url, model: snapshot.provider.model, apiKey: apiKey
-        ))
+        let usageContext = SettingsChatUsageContext(
+            statistics: store.loadUsageStatistics(),
+            appleAIConversionCount: store.loadPCCConversionCount(),
+            appleAIChatCount: store.loadPCCChatCount()
+        )
         sendTask = Task { @MainActor in
             defer {
                 if requestID == id {
@@ -272,13 +382,16 @@ struct SettingsChatView: View {
                 }
             }
             do {
-                let completion = try await client.chatForSettings(
-                    messages: history, snapshot: snapshot, usageContext: usageContext
+                let (completion, serviceName, externalProvider) = try await sendChat(
+                    route: route, messages: history, snapshot: snapshot,
+                    usageContext: usageContext, store: store
                 )
                 guard requestID == id, !Task.isCancelled else { return }
-                if let usage = completion.usage {
+                if let externalProvider, let usage = completion.usage {
                     store.recordUsage(usage, model: completion.model,
-                                      provider: snapshot.provider.provider, isSettingsChat: true)
+                                      provider: externalProvider, isSettingsChat: true)
+                } else if externalProvider == nil {
+                    store.recordPCCChat()
                 }
                 let payload = try SettingsChatPayload.decode(completion.content)
                 let updated = try snapshot.applying(payload.changes)
@@ -289,7 +402,8 @@ struct SettingsChatView: View {
                     role: .assistant,
                     text: payload.reply,
                     responseJSON: completion.content,
-                    proposal: changes.isEmpty ? nil : ChatProposal(snapshot: snapshot, changes: changes)
+                    proposal: changes.isEmpty ? nil : ChatProposal(snapshot: snapshot, changes: changes),
+                    serviceName: serviceName
                 ))
                 input = ""
                 onSettingsChanged()
@@ -346,6 +460,26 @@ struct SettingsChatView: View {
     }
 
     private func errorDescription(_ error: Error) -> String {
+        if let quota = error as? PCCQuotaReached {
+            let restart = quota.resetDate.map { "（\($0.formatted(date: .abbreviated, time: .shortened))頃に再開）" } ?? ""
+            return "AppleのAIは本日の上限に達しました\(restart)。利用できる代替AIがありません。"
+        }
+        if let pccError = error as? PCCSettingsChatError {
+            switch pccError {
+            case .deviceNotEligible:
+                return AppleAIAvailabilityCopy.ineligible
+            case .notReady:
+                return AppleAIAvailabilityCopy.notReady
+            }
+        }
+        if #available(iOS 27.0, *), let pccError = error as? PrivateCloudComputeLanguageModel.Error {
+            switch pccError {
+            case .networkFailure: return "AppleのAIに接続できません。通信状態を確認してください。"
+            case .serviceUnavailable: return "AppleのAIを現在利用できません。後ほど再試行してください。"
+            case .quotaLimitReached: return "AppleのAIは本日の上限に達しました。"
+            @unknown default: return "AppleのAIから回答を取得できませんでした。"
+            }
+        }
         if error is SettingsChatError || error is DecodingError {
             return "AIから有効な回答を取得できませんでした。入力を変えるか、もう一度送信してください。"
         }

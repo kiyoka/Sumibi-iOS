@@ -167,15 +167,21 @@ public struct SettingsChatMessage: Encodable, Sendable {
 /// A read-only, point-in-time view of usage. No forecast is computed here.
 public struct SettingsChatUsageContext: Sendable {
     public let statistics: [ModelUsageStatistics]
+    public let appleAIConversionCount: Int
+    public let appleAIChatCount: Int
     public let capturedAt: Date
     public let timeZone: TimeZone
 
     public init(
         statistics: [ModelUsageStatistics],
+        appleAIConversionCount: Int = 0,
+        appleAIChatCount: Int = 0,
         capturedAt: Date = Date(),
         timeZone: TimeZone = .current
     ) {
         self.statistics = statistics
+        self.appleAIConversionCount = appleAIConversionCount
+        self.appleAIChatCount = appleAIChatCount
         self.capturedAt = capturedAt
         self.timeZone = timeZone
     }
@@ -218,7 +224,9 @@ public struct SettingsChatUsageContext: Sendable {
             let timeZone: String
             let utcOffsetSeconds: Int
             let currency = "USD"
-            let scope = "この端末のSumibiが記録した累積統計。今回の回答のAPI費用は未計上。他アプリ・他端末の利用、実際の請求額・残高は含まない。日別履歴はない。"
+            let scope = "この端末のSumibiが記録した累積統計。外部APIの概算費用のみ計算し、AppleのAI変換とチャットは回数のみ記録する。今回の回答の費用は未計上。他アプリ・他端末の利用、実際の請求額・残高は含まない。日別履歴はない。"
+            let appleAIConversionCount: Int
+            let appleAIChatCount: Int
             let models: [ModelUsage]
             let knownCostSubtotalUSD: String
             let modelsWithUnknownCost: [String]
@@ -247,6 +255,8 @@ public struct SettingsChatUsageContext: Sendable {
             capturedAt: formatter.string(from: capturedAt),
             timeZone: timeZone.identifier,
             utcOffsetSeconds: timeZone.secondsFromGMT(for: capturedAt),
+            appleAIConversionCount: appleAIConversionCount,
+            appleAIChatCount: appleAIChatCount,
             models: models,
             knownCostSubtotalUSD: NSDecimalNumber(decimal: subtotal).stringValue,
             modelsWithUnknownCost: statistics.filter { $0.estimatedCostUSD == nil }.map(\.model)
@@ -278,8 +288,8 @@ enum SettingsChatHelp {
 
     static let guide = """
     SumibiはiPhone向けのAI日本語キーボード。英字QWERTYの1画面でローマ字を入力し「変換」を押して自然な日本語にする。自動変換や、かなキーボードへの切替は不要。
-    初期設定：SumibiアプリでAPIのURL・モデル・利用者が用意したAPIキーを設定し「設定を保存」。プライバシー欄で第三者AIへの送信に同意。iOSの設定 > 一般 > キーボード > キーボード > 新しいキーボードを追加でSumibiを追加し、Sumibiの「フルアクセスを許可」をON。入力アプリで地球儀からSumibiへ切り替える。
-    APIキーが必要な場合は利用者自身がAPI提供者で準備する。アプリのダウンロードは無料だが、設定したAPIの利用料金は別途かかる。Sumibi運営のサーバーは経由せず、設定した第三者AIへ直接送信する。
+    初期設定：対応するiOS・端末・地域ではAppleのAI変換を優先し、APIキーなしで使える。iOSの設定 > 一般 > キーボード > キーボード > 新しいキーボードを追加でSumibiを追加し、Sumibiの「フルアクセスを許可」をON。入力アプリで地球儀からSumibiへ切り替える。
+    AppleのAI変換には1日の利用上限がある。上限後に使う外部AIを設定するには、SumibiアプリでAPIのURL・モデル・利用者が用意したAPIキーを設定し「設定を保存」。プライバシー欄で第三者AIへの送信に同意する。外部AIのAPI利用料金は別途かかる場合がある。Sumibi運営のサーバーは経由しない。
     範囲変換：入力先アプリで変換したい文字列を選択し、Sumibiの「範囲を変換」を押す。選択した部分だけを変換する。選択がなければSumibiが追跡中の入力を変換する。例えば英語の文章の後にローマ字を入力し、そのローマ字部分だけを選択して変換できる。ホストアプリによって選択の扱いは異なる。
     候補・Undo：初回は候補1件を反映。「さらに変換候補を取得」で別の表現や同音異義語などを追加取得できる（追加API通信あり）。候補バーの候補を押して切替。「Undo」で変換前の原文へ戻せる。候補が画面に収まらない場合は横にスクロールする。
     記号入力：「記号」で記号一覧を開き、使いたい記号を押す。もう一度切替キーを押すと閉じる。通常のQWERTYキーは切り替えない。
@@ -293,7 +303,7 @@ enum SettingsChatHelp {
     ゲーム演出ONのときは、候補バー左端のキャラクターをタップしても、上記の順番でテーマが切り替わり、最後から先頭へ戻る。通常の文字キーでは切り替わらない。選択は保存される。猫の拡大ポーズは候補帯右端から下方向にキーの上へ重ねて表示し、キーボード上部に余白を追加せず、高さも変えない。猫に重なったキーも操作できる。
     動きが不要な場合は「ゲーム演出」をOFFにする。iOSの「設定」>「アクセシビリティ」>「動作」>「視差効果を減らす」がONのときはキャラクターの動きを抑え、ゲージの値だけ更新する。この演出はiOS 17以降で利用でき、Liquid Glassとは別の機能。
     この会話にはゲーム演出の現在のON/OFFや選択テーマは渡されていないため、現在の状態を推測しない。ゲーム演出やテーマはチャットから変更できないので、設定画面の操作を案内する。
-    変換できない場合：保存したAPI設定、第三者AIへの同意、キーボードのフルアクセス、通信状況を確認し、Sumibiアプリの変換テストを使う。認証・利用上限はAPI提供者側も確認する。タイムアウトは15秒固定。
+    変換できない場合：AppleのAI変換の端末対応・利用上限、キーボードのフルアクセス、通信状況を確認し、SumibiアプリのAppleのAI変換テストを使う。外部AIへ切り替える場合は保存したAPI設定と第三者AIへの同意、外部APIの変換テスト、API提供者側の認証・利用上限を確認する。外部APIの通信タイムアウトは15秒固定。
     """
 }
 
@@ -301,6 +311,12 @@ public struct SettingsChatCompletion: Sendable {
     public let content: String
     public let model: String
     public let usage: TokenUsage?
+
+    public init(content: String, model: String, usage: TokenUsage?) {
+        self.content = content
+        self.model = model
+        self.usage = usage
+    }
 }
 
 // Known OpenAI and Gemini models support structured output. Other compatible

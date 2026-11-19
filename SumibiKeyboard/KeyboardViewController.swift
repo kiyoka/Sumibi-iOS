@@ -1,5 +1,6 @@
 import SumibiCore
 import UIKit
+import FoundationModels
 
 private final class AudioFeedbackInputView: UIInputView, UIInputViewAudioFeedback {
     var enableInputClicksWhenVisible: Bool {
@@ -236,7 +237,11 @@ final class KeyboardViewController: UIInputViewController {
     private var retrySnapshot: ConversionSnapshot?
     private var retrySelectedTextSnapshot: SelectedTextSnapshot?
     private var additionalCandidateErrorMessage: String?
+    private var candidateRouteMessage: String?
     private var conversionTask: Task<Void, Never>?
+#if DEBUG
+    private var pccProbeTask: Task<Void, Never>?
+#endif
     private var activeRequestID: UUID?
     private var convertButton: UIButton?
     private var normalSpaceWidthConstraint: NSLayoutConstraint?
@@ -309,6 +314,10 @@ final class KeyboardViewController: UIInputViewController {
         setSymbolPanelExpanded(false, animated: false)
         conversionTask?.cancel()
         conversionTask = nil
+#if DEBUG
+        pccProbeTask?.cancel()
+        pccProbeTask = nil
+#endif
         activeRequestID = nil
         compositionTracker.reset()
         pendingConversion = nil
@@ -317,6 +326,7 @@ final class KeyboardViewController: UIInputViewController {
         retrySnapshot = nil
         retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
+        candidateRouteMessage = nil
         isEmberConversionActive = false
         stopCandidateBarShimmer()
         refreshConvertButton()
@@ -1363,6 +1373,13 @@ final class KeyboardViewController: UIInputViewController {
             label.font = .systemFont(ofSize: 13)
             candidateStack.addArrangedSubview(label)
         }
+        if let candidateRouteMessage {
+            let label = UILabel()
+            label.text = candidateRouteMessage
+            label.textColor = .secondaryLabel
+            label.font = .systemFont(ofSize: 11)
+            candidateStack.addArrangedSubview(label)
+        }
         if !session.hasRequestedAdditionalCandidates {
             addCandidateAction(
                 title: "さらに変換候補を取得",
@@ -1528,6 +1545,7 @@ final class KeyboardViewController: UIInputViewController {
         retrySnapshot = nil
         retrySelectedTextSnapshot = nil
         additionalCandidateErrorMessage = nil
+        candidateRouteMessage = nil
         isEmberConversionActive = false
         stopCandidateBarShimmer()
         showCandidateMessage("入力中")
@@ -1890,7 +1908,8 @@ final class KeyboardViewController: UIInputViewController {
         _ response: ConversionResponse,
         snapshot: ConversionSnapshot,
         surroundingContext: String,
-        requestID: UUID
+        requestID: UUID,
+        dictionaryOnly: Bool = false
     ) {
         guard activeRequestID == requestID else {
             return
@@ -1907,7 +1926,7 @@ final class KeyboardViewController: UIInputViewController {
                         unique.append(candidate)
                     }
                 }
-                .prefix(ConversionCandidateMode.primary.candidateCount)
+                .prefix(dictionaryOnly ? 10 : ConversionCandidateMode.primary.candidateCount)
         )
         guard let firstCandidate = candidates.first else {
             endEmberConversionAnimation(success: false)
@@ -1940,7 +1959,8 @@ final class KeyboardViewController: UIInputViewController {
             surroundingContext: surroundingContext,
             options: options,
             current: firstCandidate,
-            hasRequestedAdditionalCandidates: false
+            hasRequestedAdditionalCandidates: dictionaryOnly,
+            dictionaryCandidates: dictionaryOnly ? Set(candidates) : []
         )
         undoRecord = firstCandidate == snapshot.textToReplace
             ? nil
@@ -1962,27 +1982,106 @@ final class KeyboardViewController: UIInputViewController {
         guard activeRequestID == requestID else {
             return
         }
+        if let pccError = error as? PCCConversionError,
+           case .emptyResponse = pccError,
+           let localCandidates = localCandidatesAfterEmptyPCC(for: snapshot.source) {
+            let contextBeforeInput = textDocumentProxy.documentContextBeforeInput ?? ""
+            let surroundingContext = contextBeforeInput.hasSuffix(snapshot.textToReplace)
+                ? String(contextBeforeInput.dropLast(snapshot.textToReplace.count))
+                : ""
+            finishConversion(
+                ConversionResponse(candidates: localCandidates),
+                snapshot: snapshot,
+                surroundingContext: surroundingContext,
+                requestID: requestID,
+                dictionaryOnly: true
+            )
+            return
+        }
         activeRequestID = nil
         conversionTask = nil
         pendingConversion = nil
         endEmberConversionAnimation(success: false)
+        recordPCCLimitIfNeeded(for: error)
         let presentation = errorPresentation(for: error)
         retrySnapshot = presentation.retryable ? snapshot : nil
         showError(presentation.message, retryable: presentation.retryable)
     }
 
+    private func recordPCCLimitIfNeeded(for error: Error) {
+        if let error = error as? PCCConversionError {
+            switch error {
+            case .quotaReached, .fallbackFailed:
+                sharedSettings?.recordPCCLimitReached()
+            default:
+                break
+            }
+        } else if #available(iOS 27.0, *),
+                  let error = error as? PrivateCloudComputeLanguageModel.Error,
+                  case .quotaLimitReached = error {
+            sharedSettings?.recordPCCLimitReached()
+        }
+    }
+
     private func recordUsage(from response: ConversionResponse) {
+        if response.usedPCCFallback,
+           case .external(let provider) = response.backend {
+            sharedSettings?.recordPCCLimitReached()
+            candidateRouteMessage = "AppleのAI変換が上限に到達 → \(provider.displayName)で変換（API費用に注意）"
+        } else if sharedSettings?.loadPCCPreferred() == true,
+                  case .external(let provider) = response.backend {
+            candidateRouteMessage = "AppleのAI変換を利用できず → \(provider.displayName)で変換（API費用に注意）"
+        } else {
+            candidateRouteMessage = nil
+        }
+        if response.backend == .privateCloudCompute {
+            sharedSettings?.recordPCCConversion()
+            return
+        }
         guard let usage = response.usage else {
             return
         }
         let model = response.model
             ?? sharedSettings?.loadProviderConfiguration().model
             ?? ProviderConfiguration.defaultModel
-        let provider = sharedSettings?.loadProviderConfiguration().provider ?? .openAI
+        let provider: AIProvider
+        if case .external(let usedProvider) = response.backend {
+            provider = usedProvider
+        } else {
+            provider = sharedSettings?.loadProviderConfiguration().provider ?? .openAI
+        }
         sharedSettings?.recordUsage(usage, model: model, provider: provider)
     }
 
     private func errorPresentation(for error: Error) -> (message: String, retryable: Bool) {
+        if let error = error as? PCCConversionError {
+            switch error {
+            case .quotaReached(let resetDate):
+                let restart = resetDate.map { "（\($0.formatted(date: .abbreviated, time: .shortened))頃に再開）" } ?? ""
+                return ("AppleのAI変換は本日の上限に達しました\(restart)。利用できる代替AIがありません", false)
+            case .deviceNotEligible:
+                return (AppleAIAvailabilityCopy.shortIneligible, false)
+            case .notReady:
+                return (AppleAIAvailabilityCopy.shortNotReady, true)
+            case .emptyResponse:
+                return ("AppleのAI変換から有効な候補を取得できませんでした", true)
+            case .fallbackFailed(let provider):
+                return ("AppleのAI変換の上限後、\(provider.displayName)で変換できませんでした。API設定を確認してください", true)
+            }
+        }
+        if #available(iOS 27.0, *),
+           let pccError = error as? PrivateCloudComputeLanguageModel.Error {
+            switch pccError {
+            case .networkFailure:
+                return ("AppleのAI変換に接続できません。通信状態を確認してください", true)
+            case .serviceUnavailable:
+                return ("AppleのAI変換を利用できません。後ほど再試行してください", true)
+            case .quotaLimitReached:
+                return ("AppleのAI変換は本日の上限に達しました", false)
+            @unknown default:
+                return ("AppleのAI変換に失敗しました", true)
+            }
+        }
         if let error = error as? OpenAICompatibleClientError {
             switch error {
             case .invalidEndpoint:
@@ -2016,35 +2115,81 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeConversionClient() -> (any ConversionClient)? {
-        guard let configuration = sharedSettings?.loadProviderConfiguration() else {
+        guard let store = sharedSettings else {
             return MockConversionClient()
-        }
-        if configuration.endpoint.isEmpty && configuration.model.isEmpty {
-            return MockConversionClient()
-        }
-        guard
-            let endpoint = URL(string: configuration.endpoint),
-            !configuration.model.isEmpty
-        else {
-            showCandidateMessage("APIの設定を確認してください")
-            return nil
         }
         guard hasFullAccess else {
-            showCandidateMessage("API変換にはフルアクセスが必要です")
+            showCandidateMessage("ネットワーク変換にはフルアクセスが必要です")
             return nil
         }
-        guard sharedSettings?.hasAIDataSharingConsent(for: configuration.endpoint) == true else {
-            showCandidateMessage("SumibiアプリでAIへのデータ送信に同意してください")
-            return nil
+        var pccUnavailableMessage: String?
+        if store.loadPCCPreferred() {
+            if #available(iOS 27.0, *) {
+                let model = PrivateCloudComputeLanguageModel()
+                switch model.availability {
+                case .available:
+                    return PCCFirstConversionClient(fallback: makePCCFallback(using: store))
+                case .unavailable(.deviceNotEligible):
+                    pccUnavailableMessage = AppleAIAvailabilityCopy.shortIneligible
+                case .unavailable:
+                    showCandidateMessage(AppleAIAvailabilityCopy.shortNotReady)
+                    return nil
+                }
+            } else {
+                pccUnavailableMessage = AppleAIAvailabilityCopy.shortOlderOS
+            }
         }
+        let configuration = store.loadProviderConfiguration()
+        if let client = makeExternalClient(configuration, using: store) {
+            return client
+        }
+        if store.loadPCCPreferred(), let fallback = makePCCFallback(using: store) {
+            return fallback.client
+        }
+        showCandidateMessage(pccUnavailableMessage
+            ?? "API設定・APIキー・送信同意を確認してください")
+        return nil
+    }
 
-        let apiKey = try? APIKeyStore().load(for: configuration.endpoint)
-        return OpenAICompatibleClient(
-            configuration: OpenAICompatibleConfiguration(
+    private func makePCCFallback(
+        using store: SharedSettingsStore
+    ) -> (provider: AIProvider, client: any ConversionClient)? {
+        let activeProvider = store.loadProviderConfiguration().provider
+        for provider in PCCQuotaRouting.fallbackProviders(preferred: activeProvider) {
+            let configuration = store.loadProviderConfiguration(for: provider)
+            if let client = makeExternalClient(configuration, using: store) {
+                return (provider, client)
+            }
+        }
+        return nil
+    }
+
+    private func makeExternalClient(
+        _ configuration: ProviderConfiguration,
+        using store: SharedSettingsStore
+    ) -> (any ConversionClient)? {
+        guard let endpoint = URL(string: configuration.endpoint),
+              endpoint.host != nil,
+              !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              store.hasAIDataSharingConsent(for: configuration.endpoint) else {
+            return nil
+        }
+        let apiKey: String?
+        do {
+            apiKey = try APIKeyStore().load(for: configuration.endpoint)
+        } catch {
+            return nil
+        }
+        guard configuration.provider == .other || apiKey?.isEmpty == false else {
+            return nil
+        }
+        return AttributedExternalConversionClient(
+            provider: configuration.provider,
+            client: OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
                 endpoint: endpoint,
                 model: configuration.model,
                 apiKey: apiKey
-            )
+            ))
         )
     }
 
@@ -2160,6 +2305,12 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func convertTapped() {
+#if DEBUG
+        if compositionTracker.snapshot()?.source == "pcctest" {
+            testPrivateCloudComputeFromKeyboard()
+            return
+        }
+#endif
         refreshGamePreferences()
         if let selectedSnapshot = selectedTextSnapshot() {
             guard selectedSnapshot.source.count <= 512 else {
@@ -2185,6 +2336,41 @@ final class KeyboardViewController: UIInputViewController {
 
         startConversion(snapshot)
     }
+
+#if DEBUG
+    private func testPrivateCloudComputeFromKeyboard() {
+        guard #available(iOS 27.0, *) else {
+            showCandidateMessage("PCCはiOS 27以降で利用できます")
+            return
+        }
+        guard hasFullAccess else {
+            showCandidateMessage("PCCテストにはフルアクセスが必要です")
+            return
+        }
+        let model = PrivateCloudComputeLanguageModel()
+        guard case .available = model.availability else {
+            showCandidateMessage("PCCはこの端末で利用できません")
+            return
+        }
+        pccProbeTask?.cancel()
+        showCandidateMessage("PCC接続を確認中…", showsProgress: true)
+        pccProbeTask = Task { [weak self] in
+            do {
+                let session = LanguageModelSession(model: model)
+                let response = try await session.respond(to: "Reply with the single word READY.")
+                guard !Task.isCancelled else { return }
+                self?.showCandidateMessage(
+                    response.content.isEmpty ? "PCCから空の応答" : "PCC接続成功: \(response.content)"
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.showCandidateMessage("PCC接続失敗: \(error.localizedDescription)")
+            }
+            self?.pccProbeTask = nil
+        }
+    }
+#endif
 
     private func selectedTextSnapshot() -> SelectedTextSnapshot? {
         guard let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty else {
@@ -2250,7 +2436,8 @@ final class KeyboardViewController: UIInputViewController {
     private func finishSelectedTextConversion(
         _ response: ConversionResponse,
         snapshot: SelectedTextSnapshot,
-        requestID: UUID
+        requestID: UUID,
+        dictionaryOnly: Bool = false
     ) {
         guard activeRequestID == requestID else {
             return
@@ -2268,7 +2455,7 @@ final class KeyboardViewController: UIInputViewController {
                         unique.append(candidate)
                     }
                 }
-                .prefix(ConversionCandidateMode.primary.candidateCount)
+                .prefix(dictionaryOnly ? 10 : ConversionCandidateMode.primary.candidateCount)
         )
         guard let firstCandidate = candidates.first else {
             endEmberConversionAnimation(success: false)
@@ -2292,7 +2479,8 @@ final class KeyboardViewController: UIInputViewController {
             surroundingContext: snapshot.contextBefore,
             options: options,
             current: firstCandidate,
-            hasRequestedAdditionalCandidates: false
+            hasRequestedAdditionalCandidates: dictionaryOnly,
+            dictionaryCandidates: dictionaryOnly ? Set(candidates) : []
         )
         undoRecord = firstCandidate == snapshot.source
             ? nil
@@ -2312,12 +2500,31 @@ final class KeyboardViewController: UIInputViewController {
         guard activeRequestID == requestID else {
             return
         }
+        if let pccError = error as? PCCConversionError,
+           case .emptyResponse = pccError,
+           let localCandidates = localCandidatesAfterEmptyPCC(for: snapshot.source) {
+            finishSelectedTextConversion(
+                ConversionResponse(candidates: localCandidates),
+                snapshot: snapshot,
+                requestID: requestID,
+                dictionaryOnly: true
+            )
+            return
+        }
         activeRequestID = nil
         conversionTask = nil
         endEmberConversionAnimation(success: false)
+        recordPCCLimitIfNeeded(for: error)
         let presentation = errorPresentation(for: error)
         retrySelectedTextSnapshot = presentation.retryable ? snapshot : nil
         showError(presentation.message, retryable: presentation.retryable)
+    }
+
+    private func localCandidatesAfterEmptyPCC(for source: String) -> [String]? {
+        let candidates = Self.supplementalDictionary.candidates(
+            for: source, llmCandidates: [], excluding: [source], maximumAdded: 10
+        )
+        return candidates.isEmpty ? nil : candidates
     }
 
     private func startConversion(_ snapshot: ConversionSnapshot) {
@@ -2495,6 +2702,7 @@ final class KeyboardViewController: UIInputViewController {
         activeRequestID = nil
         conversionTask = nil
         endEmberConversionAnimation(success: false)
+        recordPCCLimitIfNeeded(for: error)
         let presentation = errorPresentation(for: error)
         additionalCandidateErrorMessage = presentation.message
         showCandidates()
