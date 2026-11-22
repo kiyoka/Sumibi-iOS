@@ -68,6 +68,19 @@ public enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 }
 
+public enum GeminiAgeGate {
+    public static let minimumAge = 18
+    public static let requiredMessage = "Geminiを使うには、Sumibiの設定で18歳以上であることを確認してください。"
+    public static let confirmationLifetime: TimeInterval = 30 * 24 * 60 * 60
+
+    public static func applies(to endpoint: URL) -> Bool {
+        guard let host = endpoint.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) else {
+            return false
+        }
+        return host == "generativelanguage.googleapis.com"
+    }
+}
+
 public enum GeminiModelOption: String, CaseIterable, Identifiable, Sendable {
     case quality = "gemini-4-argon"
     case economy = "gemini-3.6-flash"
@@ -190,6 +203,7 @@ public struct SharedSettingsStore {
         static let conversionPromptConfiguration = "conversionPromptConfiguration"
         static let aiDataSharingConsentEndpoint = "aiDataSharingConsentEndpoint"
         static let aiDataSharingConsentEndpoints = "aiDataSharingConsentEndpoints"
+        static let geminiAdultConfirmedAt = "geminiAdultConfirmedAt"
         static let pccPreferred = "pccPreferred"
         static let pccConversionCount = "pccConversionCount"
         static let pccChatCount = "pccChatCount"
@@ -409,6 +423,29 @@ public struct SharedSettingsStore {
 
     public func loadCustomSystemPrompt() -> String {
         loadConversionPromptConfiguration().activePrompt
+    }
+
+    public func hasGeminiAdultConfirmation(at now: Date = Date()) -> Bool {
+        #if os(iOS)
+        guard #available(iOS 26.0, *) else { return false }
+        #endif
+        guard let confirmedAt = defaults.object(forKey: Key.geminiAdultConfirmedAt) as? Date else {
+            return false
+        }
+        let elapsed = now.timeIntervalSince(confirmedAt)
+        return elapsed >= 0 && elapsed < GeminiAgeGate.confirmationLifetime
+    }
+
+    public func saveGeminiAgeRange(lowerBound: Int?, at now: Date = Date()) {
+        if let lowerBound, lowerBound >= GeminiAgeGate.minimumAge {
+            defaults.set(now, forKey: Key.geminiAdultConfirmedAt)
+        } else {
+            defaults.removeObject(forKey: Key.geminiAdultConfirmedAt)
+        }
+    }
+
+    public func canUseExternalAI(for endpoint: URL) -> Bool {
+        !GeminiAgeGate.applies(to: endpoint) || hasGeminiAdultConfirmation()
     }
 
     public func hasAIDataSharingConsent(for endpoint: String) -> Bool {

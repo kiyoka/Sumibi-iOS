@@ -268,6 +268,10 @@ struct SettingsChatView: View {
         if let destination = externalDestination(using: store) {
             return .external(destination)
         }
+        if let endpoint = URL(string: store.loadProviderConfiguration().endpoint),
+           !store.canUseExternalAI(for: endpoint) {
+            return .blocked(GeminiAgeGate.requiredMessage)
+        }
         return .blocked(pccUnavailableMessage
             ?? "外部AIのAPIキーと送信同意を設定してください。")
     }
@@ -280,6 +284,7 @@ struct SettingsChatView: View {
         guard let url = URL(string: configuration.endpoint), url.host != nil,
               ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
               !configuration.model.isEmpty,
+              store.canUseExternalAI(for: url),
               store.hasAIDataSharingConsent(for: configuration.endpoint) else { return nil }
         let key: String?
         do {
@@ -488,6 +493,7 @@ struct SettingsChatView: View {
         }
         if let error = error as? OpenAICompatibleClientError {
             switch error {
+            case .geminiAgeConfirmationRequired: return GeminiAgeGate.requiredMessage
             case .invalidCredentials: return "APIキーを確認してください。API設定は前の画面で変更できます。"
             case .rateLimited: return "APIの利用上限に達しました。時間をおいて再試行してください。"
             case .serverError: return "APIサーバーでエラーが発生しました。もう一度送信してください。"

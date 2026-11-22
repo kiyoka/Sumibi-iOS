@@ -47,6 +47,7 @@ private struct SettingsChatTests {
         try testProviders(store, defaults)
         try testUsageContext(store)
         try await testTransport(store)
+        try await testGeminiAgeGate(store)
         try await testGoogleTransport(store)
         try await testConsultationTransport(store)
         print("Chat checks passed: PCC defaults/consent, settings safety, legacy usage, usage context, consultation requests, conversion compatibility (mock API; not a live LLM evaluation)")
@@ -471,6 +472,43 @@ private struct SettingsChatTests {
         store.resetUsageStatistics()
     }
 
+    static func testGeminiAgeGate(_ store: SharedSettingsStore) async throws {
+        let google = URL(string: AIProvider.google.defaultEndpoint)!
+        let openAI = URL(string: AIProvider.openAI.defaultEndpoint)!
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        expect(!store.canUseExternalAI(for: google), "Missing age confirmation must block Gemini")
+        expect(store.canUseExternalAI(for: openAI), "Age gate must not affect OpenAI")
+        expect(GeminiAgeGate.applies(to: URL(string: "https://GENERATIVELANGUAGE.GOOGLEAPIS.COM./v1beta/openai")!),
+               "Custom endpoint must not bypass the gate via a DNS alias spelling")
+        store.saveGeminiAgeRange(lowerBound: 17, at: now)
+        expect(!store.hasGeminiAdultConfirmation(at: now), "Under 18 must be rejected")
+        store.saveGeminiAgeRange(lowerBound: 18, at: now)
+        expect(store.hasGeminiAdultConfirmation(at: now), "18 must be accepted")
+        expect(!store.hasGeminiAdultConfirmation(at: now.addingTimeInterval(GeminiAgeGate.confirmationLifetime)),
+               "Expired confirmation must be rejected")
+        expect(!store.hasGeminiAdultConfirmation(at: now.addingTimeInterval(-1)),
+               "Clock rollback must fail closed")
+        store.saveGeminiAgeRange(lowerBound: nil)
+        expect(!store.hasGeminiAdultConfirmation(at: now), "Unknown age must clear previous approval")
+
+        let network = URLSessionConfiguration.ephemeral
+        network.protocolClasses = [MockChatProtocol.self]
+        let session = URLSession(configuration: network)
+        defer { session.invalidateAndCancel() }
+        MockChatProtocol.handler = { _ in preconditionFailure("Gemini must not receive a request without confirmation") }
+        let client = OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
+            endpoint: google, model: GeminiModelOption.economy.rawValue, apiKey: "TEST_KEY"
+        ), session: session, geminiAdultConfirmed: { false })
+        do {
+            _ = try await client.convert(ConversionRequest(source: "nihongo"))
+            preconditionFailure("Unconfirmed conversion returned")
+        } catch OpenAICompatibleClientError.geminiAgeConfirmationRequired {}
+        do {
+            _ = try await client.chatForSettings(messages: [], snapshot: store.loadSettingsChatSnapshot())
+            preconditionFailure("Unconfirmed chat returned")
+        } catch OpenAICompatibleClientError.geminiAgeConfirmationRequired {}
+    }
+
     static func testGoogleTransport(_ store: SharedSettingsStore) async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockChatProtocol.self]
@@ -480,7 +518,7 @@ private struct SettingsChatTests {
             let client = OpenAICompatibleClient(configuration: OpenAICompatibleConfiguration(
                 endpoint: URL(string: AIProvider.google.defaultEndpoint)!,
                 model: option.rawValue, apiKey: "GOOGLE_TEST_KEY"
-            ), session: session)
+            ), session: session, geminiAdultConfirmed: { true })
             MockChatProtocol.handler = { request in
                 expect(request.url?.absoluteString ==
                        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
