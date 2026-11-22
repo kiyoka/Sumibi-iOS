@@ -477,7 +477,7 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
@@ -486,7 +486,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
 				PROVISIONING_PROFILE_SPECIFIER = "Sumibi App PCC Development iPhone 17e";
@@ -505,7 +505,7 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiApp/SumibiApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Sumibi;
@@ -514,7 +514,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS";
 				PRODUCT_NAME = Sumibi;
 				PROVISIONING_PROFILE_SPECIFIER = "Sumibi App PCC App Store 2026";
@@ -531,12 +531,12 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
 				PROVISIONING_PROFILE_SPECIFIER = "Sumibi Keyboard PCC Development iPhone 17e";
@@ -554,12 +554,12 @@
 				CODE_SIGN_ENTITLEMENTS = SumibiKeyboard/SumibiKeyboard.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = HJ95UN7B74;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SumibiKeyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "org.sumibi.Sumibi-iOS.Keyboard";
 				PRODUCT_NAME = SumibiKeyboard;
 				PROVISIONING_PROFILE_SPECIFIER = "Sumibi Keyboard PCC App Store";

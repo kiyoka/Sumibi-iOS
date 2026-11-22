@@ -1,3 +1,4 @@
+import DeclaredAgeRange
 import FoundationModels
 import SumibiCore
 import SwiftUI
@@ -214,6 +215,20 @@ private struct ContentView: View {
                     .focused($focusedAPIField, equals: .endpoint)
             } else {
                 LabeledContent("エンドポイント", value: endpoint)
+            }
+
+            if let url = URL(string: endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
+               GeminiAgeGate.applies(to: url) {
+                Text("Geminiは18歳以上が対象です。Google Cloudの請求が有効なプロジェクトのAPIキーを使用し、無料枠のキーは使用しないでください。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                if #available(iOS 26.0, *) {
+                    GeminiAgeConfirmationView()
+                } else {
+                    Text("Geminiの年齢確認にはiOS 26以降が必要です。この端末ではOpenAIなど別の接続先をご利用ください。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if provider == .openAI {
@@ -844,6 +859,10 @@ private struct ContentView: View {
             externalTestResult = "APIのURLとモデル名を入力してください。"
             return
         }
+        if GeminiAgeGate.applies(to: endpointURL), SharedSettingsStore()?.canUseExternalAI(for: endpointURL) != true {
+            externalTestResult = GeminiAgeGate.requiredMessage
+            return
+        }
         guard SharedSettingsStore()?.hasAIDataSharingConsent(for: normalizedEndpoint) == true else {
             externalTestResult = "外部AIへのデータ送信に同意してください。"
             return
@@ -891,6 +910,8 @@ private struct ContentView: View {
 
     private func message(for error: OpenAICompatibleClientError) -> String {
         switch error {
+        case .geminiAgeConfirmationRequired:
+            GeminiAgeGate.requiredMessage
         case .invalidEndpoint:
             "APIのURLが無効です。"
         case .invalidResponse, .emptyResponse:
@@ -903,6 +924,75 @@ private struct ContentView: View {
             "APIサーバーでエラーが発生しました。"
         case .httpError:
             "APIリクエストに失敗しました。"
+        }
+    }
+}
+
+@available(iOS 26.0, *)
+private struct GeminiAgeConfirmationView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var confirmed = false
+    @State private var checking = false
+    @State private var message = ""
+
+    var body: some View {
+        Button(confirmed ? "Geminiの年齢を再確認" : "18歳以上であることを確認") {
+            Task { await confirmAge() }
+        }
+        .disabled(checking)
+        .task { refresh() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refresh() }
+        }
+        if confirmed {
+            Label("Gemini：18歳以上を確認済み", systemImage: "checkmark.circle")
+        }
+        if !message.isEmpty {
+            Text(message).font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    private func refresh() {
+        confirmed = SharedSettingsStore()?.hasGeminiAdultConfirmation() == true
+    }
+
+    @MainActor
+    private func confirmAge() async {
+        guard !checking, let store = SharedSettingsStore() else { return }
+        checking = true
+        message = ""
+        store.saveGeminiAgeRange(lowerBound: nil)
+        refresh()
+        defer {
+            refresh()
+            checking = false
+        }
+        guard var presenter = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })?
+            .keyWindow?.rootViewController else {
+            message = "年齢確認を表示できませんでした。もう一度お試しください。"
+            return
+        }
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        do {
+            switch try await AgeRangeService.shared.requestAgeRange(
+                ageGates: GeminiAgeGate.minimumAge, in: presenter
+            ) {
+            case .sharing(let range):
+                store.saveGeminiAgeRange(lowerBound: range.lowerBound)
+                if !store.hasGeminiAdultConfirmation() {
+                    message = "18歳以上と確認できなかったため、Geminiは利用できません。"
+                }
+            case .declinedSharing:
+                message = "年齢範囲が共有されなかったため、Geminiは利用できません。"
+            @unknown default:
+                message = "年齢を確認できませんでした。Geminiは利用できません。"
+            }
+        } catch {
+            message = "年齢を確認できませんでした。Geminiは利用できません。"
         }
     }
 }
@@ -1350,6 +1440,10 @@ private struct ConversionPromptPresetEditor: View {
             return
         }
         let configuration = store.loadProviderConfiguration()
+        if let endpoint = URL(string: configuration.endpoint), !store.canUseExternalAI(for: endpoint) {
+            testMessage = GeminiAgeGate.requiredMessage
+            return
+        }
         guard
             let endpointURL = URL(string: configuration.endpoint),
             store.hasAIDataSharingConsent(for: configuration.endpoint)

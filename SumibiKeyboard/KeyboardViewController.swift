@@ -2084,6 +2084,8 @@ final class KeyboardViewController: UIInputViewController {
         }
         if let error = error as? OpenAICompatibleClientError {
             switch error {
+            case .geminiAgeConfirmationRequired:
+                return (GeminiAgeGate.requiredMessage, false)
             case .invalidEndpoint:
                 return ("APIのURLが無効です", false)
             case .invalidResponse, .emptyResponse:
@@ -2146,6 +2148,10 @@ final class KeyboardViewController: UIInputViewController {
         if store.loadPCCPreferred(), let fallback = makePCCFallback(using: store) {
             return fallback.client
         }
+        if let endpoint = URL(string: configuration.endpoint), !store.canUseExternalAI(for: endpoint) {
+            showCandidateMessage("GeminiはSumibiの設定で18歳以上の確認が必要です")
+            return nil
+        }
         showCandidateMessage(pccUnavailableMessage
             ?? "API設定・APIキー・送信同意を確認してください")
         return nil
@@ -2171,6 +2177,7 @@ final class KeyboardViewController: UIInputViewController {
         guard let endpoint = URL(string: configuration.endpoint),
               endpoint.host != nil,
               !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              store.canUseExternalAI(for: endpoint),
               store.hasAIDataSharingConsent(for: configuration.endpoint) else {
             return nil
         }

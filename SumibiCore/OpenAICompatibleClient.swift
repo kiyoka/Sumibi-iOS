@@ -27,6 +27,7 @@ public enum OpenAICompatibleClientError: Error, Equatable, Sendable {
     case serverError(statusCode: Int)
     case httpError(statusCode: Int)
     case emptyResponse
+    case geminiAgeConfirmationRequired
 }
 
 public struct OpenAICompatibleClient: ConversionClient {
@@ -91,6 +92,7 @@ public struct OpenAICompatibleClient: ConversionClient {
 
     private let configuration: OpenAICompatibleConfiguration
     private let session: URLSession
+    private let geminiAdultConfirmed: @Sendable () -> Bool
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -98,8 +100,19 @@ public struct OpenAICompatibleClient: ConversionClient {
         configuration: OpenAICompatibleConfiguration,
         session: URLSession = .shared
     ) {
+        self.init(configuration: configuration, session: session) {
+            SharedSettingsStore()?.hasGeminiAdultConfirmation() == true
+        }
+    }
+
+    init(
+        configuration: OpenAICompatibleConfiguration,
+        session: URLSession,
+        geminiAdultConfirmed: @escaping @Sendable () -> Bool
+    ) {
         self.configuration = configuration
         self.session = session
+        self.geminiAdultConfirmed = geminiAdultConfirmed
     }
 
     public func convert(_ request: ConversionRequest) async throws -> ConversionResponse {
@@ -275,6 +288,9 @@ public struct OpenAICompatibleClient: ConversionClient {
     ) async throws -> ChatResponse {
         guard let endpoint = chatCompletionsURL(from: configuration.endpoint) else {
             throw OpenAICompatibleClientError.invalidEndpoint
+        }
+        if GeminiAgeGate.applies(to: endpoint), !geminiAdultConfirmed() {
+            throw OpenAICompatibleClientError.geminiAgeConfirmationRequired
         }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
